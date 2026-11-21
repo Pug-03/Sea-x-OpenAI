@@ -1,0 +1,35 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+.DS_Store
+apps/web/test-results/
+apps/web/playwright-report/
+data/precomputed/
+review/
+
+# Wrangler local state
+.wrangler/
+
+# Local secrets and env overrides (only .env.example / .env.development / .env.production are committed)
+.env.*.local
+.dev.vars
+*.pem
+
+# Scratch / QA scripts and outputs
+.*.tmp.mjs
+.qa*-*.mjs
+.cr-*.ts
+.perf-*.mjs
+test-results/
+playwright-report/
+*.log
+
+# Presentation assets (kept locally, not part of the app)
+screenshots-iphone/
+
+# Design-tool state
+apps/web/.impeccable/
+.impeccable/
+apps/ai-proxy/dist/
