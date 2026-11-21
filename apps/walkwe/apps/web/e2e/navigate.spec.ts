@@ -35,6 +35,105 @@ async function startSiamToCentralWorld(page: import('@playwright/test').Page) {
 const photoLoaded = (page: import('@playwright/test').Page) =>
   page.locator('.carousel-slide:not([aria-hidden="true"]) .step-photo-img');
 
+async function recordDeviceSpeech(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    const speech: { text: string; lang: string }[] = [];
+    Object.defineProperty(window, 'navigationSpeech', { value: speech });
+    Object.defineProperty(window, 'speechSynthesis', {
+      value: {
+        cancel() {},
+        getVoices: () => [],
+        speak(utterance: SpeechSynthesisUtterance) {
+          speech.push({ text: utterance.text, lang: utterance.lang });
+          utterance.dispatchEvent(new Event('end'));
+        },
+      },
+    });
+  });
+  return () => page.evaluate(() => (window as Window & { navigationSpeech?: { text: string; lang: string }[] }).navigationSpeech ?? []);
+}
+
+test('read aloud uses the distance on the current navigation step', async ({ page, context }) => {
+  const proxyText: string[] = [];
+  await context.route('**/speak', async (route) => {
+    proxyText.push(route.request().postDataJSON().text as string);
+    await route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*' } });
+  });
+  const recorded = await recordDeviceSpeech(page);
+  await startSiamToCentralWorld(page);
+  const active = page.locator('.carousel-slide:not([aria-hidden="true"])');
+  const readings = [
+    { metres: 8, display: 'เดินต่อ 10 ม.', speech: 'เดินต่อ 10 เมตร' },
+    { metres: 392, display: 'เดินต่อ 390 ม.', speech: 'เดินต่อ 390 เมตร' },
+  ];
+  for (const [index, { metres, display, speech }] of readings.entries()) {
+    if (index > 0) await page.getByTestId('im-here').click();
+    await expect(active.getByText(display, { exact: false })).toBeVisible();
+    expect(await page.evaluate(() => {
+      const session = JSON.parse(localStorage.getItem('ww_nav')!);
+      return session.steps[session.index].distanceM;
+    })).toBe(metres);
+    await page.getByTestId('step-read').click();
+    await expect.poll(async () => (await recorded()).at(index)?.text).toContain(speech);
+  }
+  if (process.env.VITE_AI_PROXY_URL) expect(proxyText).toEqual([expect.stringContaining(readings[0]!.speech)]);
+});
+
+test('agent reads English in Thai UI and rejects a changed bilingual distance', async ({ page, context }) => {
+  test.skip(!process.env.VITE_AI_PROXY_URL, 'Run with a proxy URL to exercise the agent bootstrap.');
+  const recorded = await recordDeviceSpeech(page);
+  const toolResults: { status: string; distance_m: number; speak_text: string }[] = [];
+  const requests: string[] = [];
+  await context.route('**/voice/session', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({});
+    await route.fulfill({ json: { agentId: 'agent_demo' } });
+  });
+  await context.route('**/speak', (route) => route.fulfill({ status: 204 }));
+  await page.routeWebSocket(/api\.elevenlabs\.io\/v1\/convai\/conversation/, (socket) => {
+    const send = (data: object) => socket.send(JSON.stringify(data));
+    socket.onMessage((raw) => {
+      const event = JSON.parse(raw.toString());
+      if (event.type === 'conversation_initiation_client_data') {
+        expect(event.conversation_config_override.conversation).toEqual({ text_only: true });
+        expect(event.conversation_config_override.agent.language).toBe('th');
+        send({ type: 'conversation_initiation_metadata' });
+      } else if (event.type === 'user_message') {
+        requests.push(event.text);
+        send({ type: 'client_tool_call', client_tool_call: {
+          tool_name: 'repeat_instruction', tool_call_id: 'repeat', parameters: { which: 'last_instruction' },
+        } });
+      } else if (event.type === 'client_tool_result') {
+        expect(event.is_error).toBe(false);
+        const result = JSON.parse(event.result);
+        toolResults.push(result);
+        const reply = toolResults.length === 1 ? result.speak_text : 'Walk 999 metres';
+        send({ type: 'agent_response', agent_response_event: { agent_response: reply } });
+      }
+    });
+  });
+  await startSiamToCentralWorld(page);
+  const selector = page.getByLabel('ภาษาอ่านขั้นนี้ซ้ำ');
+  const agent = page.getByRole('button', { name: 'ให้ Walk We Agent อ่าน' });
+  await selector.selectOption('en');
+  await agent.click();
+  await expect.poll(recorded).toEqual([{ lang: 'en-GB', text: expect.stringContaining('Walk 10 metres') }]);
+  expect(requests[0]).toContain('in English');
+  expect(toolResults[0]).toMatchObject({ status: 'ok', distance_m: 8, speak_text: expect.stringContaining('Walk 10 metres') });
+
+  await selector.selectOption('both');
+  await page.getByTestId('im-here').click();
+  await expect(selector).toHaveValue('both');
+  await agent.click();
+  await expect(page.getByRole('status').filter({ hasText: 'ตรวจคำตอบจาก Agent ไม่ได้' })).toBeVisible();
+  await expect.poll(async () => (await recorded()).slice(1)).toEqual([
+    { lang: 'th-TH', text: expect.stringContaining('เดินต่อ 390 เมตร') },
+    { lang: 'en-GB', text: expect.stringContaining('Walk 390 metres') },
+  ]);
+  expect(toolResults[1]).toMatchObject({ status: 'ok', distance_m: 392 });
+  expect(toolResults[1]!.speak_text).toContain('เดินต่อ 390 เมตร');
+  expect(toolResults[1]!.speak_text).toContain('Walk 390 metres');
+});
+
 test('airplane mode mid-route: steps, photos, map and reload keep working', async ({ page, context }) => {
   await startSiamToCentralWorld(page);
 

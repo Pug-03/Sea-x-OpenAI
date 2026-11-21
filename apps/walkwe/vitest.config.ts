@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 // depend on the browser); the web app's unit tests opt into jsdom per file.
 export default defineConfig({
   test: {
-    include: ['packages/*/test/**/*.test.ts', 'config/**/*.test.ts', 'apps/web/src/**/*.test.{ts,tsx}'],
+    include: ['packages/*/test/**/*.test.ts', 'config/**/*.test.ts', 'apps/*/src/**/*.test.{ts,tsx}'],
     environment: 'node',
   },
 });

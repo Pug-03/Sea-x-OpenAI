@@ -4566,6 +4566,7 @@ a {
   font-weight: 600;
 }
 .route-access.has-stairs { background: rgb(255 200 97 / 0.14); color: #ffc861; }
+.step-voice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .step-read {
   justify-self: start;
   display: inline-flex;

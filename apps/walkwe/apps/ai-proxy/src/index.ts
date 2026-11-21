@@ -1,8 +1,9 @@
-// Walk We AI proxy (Cloudflare Worker). Holds the Claude API key so it never
-// reaches the browser, and exposes exactly two calls:
+// Walk We AI proxy (Cloudflare Worker). Provider keys stay in the Worker.
 //
 //   POST /parse    { text, lang }   -> RouteIntent (structured fields only)
 //   POST /explain  RouteFacts       -> { text }   (one sentence from computed numbers)
+//   POST /speak    { text, lang }   -> audio or browser fallback
+//   POST /voice/session {}          -> { agentId } for the approved app origin
 //
 // Privacy: requests carry no coordinates (the schemas have no field for
 // them) and nothing here logs request bodies or prompts. Abuse: origin
@@ -31,9 +32,11 @@ export interface Env {
   GLOBAL_LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
   /** ElevenLabs key for /speak (wrangler secret). Without it /speak answers 204 and the app uses the phone's voice. */
   ELEVENLABS_API_KEY?: string;
-  /** ElevenLabs voice and model (wrangler.toml [vars]); both speak Thai and English. */
+  /** Optional ElevenLabs voice and model overrides (wrangler.toml [vars]). */
   ELEVENLABS_VOICE_ID?: string;
   ELEVENLABS_MODEL?: string;
+  ELEVENLABS_AGENT_ID?: string;
+  ELEVENLABS_AGENT_ORIGIN?: string;
 }
 
 /** /speak body: short text to read aloud (a navigation step, a route summary). */
@@ -48,10 +51,11 @@ async function speak(env: Env, body: unknown, cors: HeadersInit): Promise<Respon
   if (!env.ELEVENLABS_API_KEY) return new Response(null, { status: 204, headers: { 'x-tts': 'off', ...cors } });
   const { text, lang } = speakSchema.parse(body);
   const voice = env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb';
+  const model = env.ELEVENLABS_MODEL || (lang === 'th' ? 'eleven_v3' : 'eleven_flash_v2_5');
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_22050_32`, {
     method: 'POST',
     headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: env.ELEVENLABS_MODEL || 'eleven_flash_v2_5', language_code: lang }),
+    body: JSON.stringify({ text, model_id: model, language_code: lang }),
     signal: AbortSignal.timeout(10_000),
   });
   if (res.status === 429) return json({ error: 'rate_limited' }, 429, cors);
@@ -147,7 +151,7 @@ export default {
     if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
 
     const path = new URL(req.url).pathname;
-    if (path !== '/parse' && path !== '/explain' && path !== '/speak') return json({ error: 'not_found' }, 404, cors);
+    if (!['/parse', '/explain', '/speak', '/voice/session'].includes(path)) return json({ error: 'not_found' }, 404, cors);
 
     // Rate limit per client address (used only as a limiter key, never stored or logged).
     const who = req.headers.get('cf-connecting-ip') ?? 'unknown';
@@ -166,6 +170,19 @@ export default {
         return await speak(env, await readJson(req), cors);
       } catch {
         return json({ error: 'bad_request' }, 400, cors);
+      }
+    }
+
+    if (path === '/voice/session') {
+      const noStore = { ...cors, 'cache-control': 'no-store' };
+      if (!env.ELEVENLABS_AGENT_ID || req.headers.get('origin') !== env.ELEVENLABS_AGENT_ORIGIN) {
+        return json({ error: 'unavailable' }, 503, noStore);
+      }
+      try {
+        z.strictObject({}).parse(await readJson(req));
+        return json({ agentId: env.ELEVENLABS_AGENT_ID }, 200, noStore);
+      } catch {
+        return json({ error: 'bad_request' }, 400, noStore);
       }
     }
 

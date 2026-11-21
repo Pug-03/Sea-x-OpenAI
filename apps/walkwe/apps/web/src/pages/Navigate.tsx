@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, ArrowUp, ArrowUpLeft, ArrowUpRight, ChevronLeft, ChevronRight, CloudOff, CornerUpLeft, CornerUpRight,
-  Flag, Footprints, Map as MapIcon, Rows3, Share2, Undo2, Volume2, WifiOff, X,
+  Flag, Footprints, Map as MapIcon, Rows3, Share2, Undo2, WifiOff, X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useGo } from '../utils/transition.ts';
@@ -12,13 +12,15 @@ import { MapBoundary } from '../components/MapBoundary.tsx';
 import { InstallPrompt } from '../components/nav/InstallPrompt.tsx';
 import { StepCarousel } from '../components/nav/StepCarousel.tsx';
 import { PhotoViewer, StepPhoto } from '../components/nav/StepPhoto.tsx';
+import { StepVoice } from '../components/nav/StepVoice.tsx';
 import { Dialog } from '../components/ui.tsx';
 import { ShareLocation } from '../components/sos/ShareLocation.tsx';
 import { env } from '../env.ts';
 import { loadPhotoManifest } from '../nav/guides.ts';
 import { prefetchForRoute } from '../nav/prefetch.ts';
 import { loadSession, remainingM, saveSession, stepClosed, type NavSession } from '../nav/session.ts';
-import { stepHints, stepInstruction } from '../nav/text.ts';
+import { navigationStepWords, repeatNavigationInstruction, verifiedNavigationSpeech } from '../nav/text.ts';
+import type { ReadingLanguage } from '../nav/voiceAgent.ts';
 import { platform } from '../services.ts';
 import { useI18n } from '../store/i18n.tsx';
 import { useTheme } from '../store/theme.tsx';
@@ -65,6 +67,7 @@ export default function Navigate() {
   const nav = useNavigate();
   const go = useGo();
   const [session, setSession] = useState<NavSession | null>(loadSession);
+  const [readingLanguage, setReadingLanguage] = useState<ReadingLanguage>();
   const [manifest, setManifest] = useState<PhotoManifest | null>(null);
   const [view, setView] = useState<'steps' | 'map'>('steps');
   const [viewer, setViewer] = useState<{ photo: string; caption: string } | null>(null);
@@ -197,10 +200,10 @@ export default function Navigate() {
   useEffect(() => {
     if (!session || arrived || !getAccess().voice || spokenIndex.current === session.index) return;
     spokenIndex.current = session.index;
-    readStepRef.current?.(session.index);
+    readStepRef.current?.();
   }, [session?.index, arrived]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => stopSpeaking(), []);
-  const readStepRef = useRef<((i: number) => void) | null>(null);
+  const readStepRef = useRef<(() => void) | null>(null);
 
   const finish = () => {
     saveSession(null);
@@ -243,24 +246,9 @@ export default function Navigate() {
   const day = session.mode === 'day';
   const toStep = me && me.accuracy <= USABLE_ACCURACY_M ? haversineMeters(me.p, current.at) : null;
 
-  const stepWords = (i: number) => {
-    const s = steps[i]!;
-    const instruction = s.guide ? s.guide.instruction[lang] : stepInstruction(s.step, lang);
-    const hints = s.guide
-      ? [s.distanceM > 0 ? (lang === 'th' ? `เดินต่อ ${formatDistance(s.distanceM, lang)}` : `Walk ${formatDistance(s.distanceM, lang)}`) : null, ...stepHints(s.step, 0, lang, day)].filter(Boolean)
-      : stepHints(s.step, s.distanceM, lang, day);
-    return { instruction, hints: hints as string[] };
-  };
-  const readStep = (i: number) => {
-    const { instruction, hints } = stepWords(i);
-    const lm = steps[i]!.guide ? t('nav.landmark', { l: steps[i]!.guide!.landmark[lang] }) : '';
-    // Spoken form: units spelled out, one full stop between parts.
-    const spoken = (x: string) =>
-      x
-        .replace(/(\d)\s*กม\./g, '$1 กิโลเมตร')
-        .replace(/(\d)\s*ม\./g, '$1 เมตร')
-        .replace(/[.\s]+$/, '');
-    void speak([instruction, ...hints, lm].filter(Boolean).map(spoken).join('. '), lang);
+  const readStep = () => {
+    const speech = verifiedNavigationSpeech(repeatNavigationInstruction(session, lang), session, lang);
+    if (speech) void speak(speech, lang);
   };
 
   readStepRef.current = readStep;
@@ -268,7 +256,7 @@ export default function Navigate() {
   const renderStep = (i: number) => {
     const s = steps[i]!;
     const Icon = ICON[s.step.maneuver];
-    const { instruction, hints } = stepWords(i);
+    const { instruction, hints } = navigationStepWords(s, lang, day);
     const closed = stepClosed(s, new Date());
     return (
       <article className="step-card" aria-label={t('nav.step', { n: i + 1, total: steps.length })}>
@@ -292,12 +280,8 @@ export default function Navigate() {
             {instruction}
           </p>
           {hints.length > 0 && <p className="small">{hints.join(' · ')}</p>}
-          {i === index && (
-            <button type="button" className="step-read" onClick={() => readStep(i)} data-testid="step-read">
-              <Volume2 size={18} aria-hidden="true" />
-              {t('access.read')}
-            </button>
-          )}
+          {i === index && <StepVoice key={`${session.id}:${index}`} session={session} online={online}
+            selected={readingLanguage ?? lang} onLanguage={setReadingLanguage} />}
           {s.guide && <p className="small">{t('nav.landmark', { l: s.guide.landmark[lang] })}</p>}
           {closed && s.guide && (
             <p className="notice">

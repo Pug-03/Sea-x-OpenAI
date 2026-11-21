@@ -1,6 +1,7 @@
 import type { RouteStep } from '@walkwe/core';
-import type { Lang } from '../i18n.ts';
+import { translate, type Lang } from '../i18n.ts';
 import { formatDistance } from '../utils/format.ts';
+import type { NavSession, NavStep } from './session.ts';
 
 // Wording for generated steps, Thai and English. Kept here (not in the
 // router) so core stays language-free and the phrasing can be tuned with
@@ -54,4 +55,52 @@ export function stepHints(s: RouteStep, distanceM: number, lang: Lang, day: bool
   }
   if (s.mall) out.push(th ? `ผ่าน ${s.mall}` : `Through ${s.mall}`);
   return out;
+}
+
+export function navigationStepWords(step: NavStep, lang: Lang, day: boolean) {
+  if (!step.guide) {
+    return { instruction: stepInstruction(step.step, lang), hints: stepHints(step.step, step.distanceM, lang, day) };
+  }
+  const hints = stepHints(step.step, 0, lang, day);
+  if (step.distanceM > 0) {
+    const distance = formatDistance(step.distanceM, lang);
+    hints.unshift(lang === 'th' ? `เดินต่อ ${distance}` : `Walk ${distance}`);
+  }
+  return { instruction: step.guide.instruction[lang], hints };
+}
+
+/** The read-step tool responds from the active route, without taking a distance from its caller. */
+export function repeatNavigationInstruction(session: NavSession, lang: Lang) {
+  const step = session.steps[session.index];
+  if (!step || !Number.isFinite(step.distanceM) || step.distanceM < 0) {
+    return { status: 'unavailable' } as const;
+  }
+  const { instruction, hints } = navigationStepWords(step, lang, session.mode === 'day');
+  const landmark = step.guide ? translate(lang, 'nav.landmark', { l: step.guide.landmark[lang] }) : '';
+  const speakText = [instruction, ...hints, landmark]
+    .filter(Boolean)
+    .map((part) => part
+      .replace(/(\d)\s*กม\./g, '$1 กิโลเมตร')
+      .replace(/(\d)\s*ม\./g, '$1 เมตร')
+      .replace(/(\d)\s*km\b/g, '$1 kilometres')
+      .replace(/(\d)\s*m\b/g, '$1 metres')
+      .replace(/[.\s]+$/, ''))
+    .join('. ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { status: 'ok', trip_id: session.id, step_index: session.index, distance_m: step.distanceM, speak_text: speakText } as const;
+}
+
+/** Validate the tool result against the current step before either TTS backend sees it. */
+export function verifiedNavigationSpeech(
+  result: unknown, session: NavSession, lang: Lang,
+): string | null {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
+  const expected = repeatNavigationInstruction(session, lang);
+  const candidate = result as Record<string, unknown>;
+  if (expected.status !== 'ok' || candidate.status !== 'ok'
+    || candidate.trip_id !== expected.trip_id || candidate.step_index !== expected.step_index
+    || candidate.distance_m !== expected.distance_m || candidate.speak_text !== expected.speak_text
+    || expected.speak_text.length > 300) return null;
+  return expected.speak_text;
 }

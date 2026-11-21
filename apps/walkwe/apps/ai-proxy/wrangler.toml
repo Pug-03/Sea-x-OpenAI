@@ -7,7 +7,9 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # Exact origin of the deployed web app; anything else gets 403. For local
 # development put ALLOWED_ORIGINS="http://localhost:5173" in .dev.vars (git-ignored).
-ALLOWED_ORIGINS = "https://walkwe-web.walkwe.workers.dev"
+ALLOWED_ORIGINS = "https://walkwe-web.walkwe.workers.dev,https://walkwe-web2.walkwe.workers.dev"
+ELEVENLABS_AGENT_ORIGIN = "https://walkwe-web2.walkwe.workers.dev"
+# Set ELEVENLABS_AGENT_ID on the demo deployment to opt in to paid agent turns.
 
 # 20 requests per minute per client address (all paths together)…
 [[ratelimits]]
