@@ -10,6 +10,7 @@ const schema = z.object({
   VITE_ERROR_TRACKING_URL: z.union([z.literal(''), z.string().url()]).default(''),
   // Walk We AI proxy (apps/ai-proxy). Empty = AI features hidden; everything still works by hand.
   VITE_AI_PROXY_URL: z.union([z.literal(''), z.string().url()]).default(''),
+  VITE_VOICE_PROVIDER: z.enum(['elevenlabs', 'openai']).default('elevenlabs'),
 });
 
 const parsed = schema.safeParse(import.meta.env);
@@ -23,4 +24,5 @@ export const env = {
   weatherUrl: parsed.data.VITE_WEATHER_URL,
   errorTrackingUrl: parsed.data.VITE_ERROR_TRACKING_URL || null,
   aiProxyUrl: parsed.data.VITE_AI_PROXY_URL.replace(/\/$/, '') || null,
+  voiceProvider: parsed.data.VITE_VOICE_PROVIDER,
 };

@@ -6,7 +6,8 @@
   "description": "Routing, shadow and scoring logic. Must run in Node: no DOM or UI dependencies.",
   "exports": {
     ".": "./src/index.ts",
-    "./ai": "./src/ai/adapter.ts"
+    "./ai": "./src/ai/adapter.ts",
+    "./voice": "./src/voice.ts"
   },
   "dependencies": {
     "@walkwe/config": "*",

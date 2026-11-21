@@ -58,7 +58,7 @@ export function StepVoice({ session, online, selected, onLanguage }: {
           <Volume2 size={18} aria-hidden="true" />
           {t('access.read')}
         </button>
-        {env.aiProxyUrl && online && (
+        {env.aiProxyUrl && env.voiceProvider === 'elevenlabs' && online && (
           <button type="button" className="step-read" disabled={busy} onClick={() => void read(true)}>
             {t(busy ? 'nav.voiceWaiting' : 'nav.voiceAgent')}
           </button>

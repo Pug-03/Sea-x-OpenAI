@@ -8,6 +8,8 @@ Local integration and evaluation workspace for Walk We. The packages cover route
 
 Work in this hackathon repo includes the agentic routing and evidence workflows, review and practice flows under `packages/`, and the bilingual navigation replay in the PWA. Codex implemented and tested the Thai/English replay, explicit ElevenLabs session bootstrap through the existing proxy, and the app-side check against the active navigation step. [Bilingual replay and demo notes](docs/VOICE_DEMO.md)
 
+The PWA can also use GPT‑Live with GPT‑6.1 Terra for the same walking and safety workflows. [Voice providers and configuration](docs/VOICE_PROVIDERS.md)
+
 ## Run locally
 
 Requires Node.js 22 or later. The offline tests, fixture eval and preview do not require npm dependencies or API credentials.
