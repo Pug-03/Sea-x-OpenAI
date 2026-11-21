@@ -2,28 +2,17 @@ import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { contextVersion } from "../src/context.mjs";
 import { version } from "../src/fixture.mjs";
-import { createModelClient, modelProfiles } from "../src/model.mjs";
+import { createModelClient, estimateModelCost, modelProfiles } from "../src/model.mjs";
 import { liveCases, localCases } from "./cases.mjs";
 
 const { values } = parseArgs({ options: {
   live: { type: "boolean" }, out: { type: "string" }, case: { type: "string", multiple: true },
 } });
-// Standard USD per million tokens for short prompts and the default 30-minute cache.
-const prices = {
-  "gpt-6.1-terra": { input: 1, cachedInput: 0.05, cacheWrite: 1.25, output: 5 },
-  "gpt-6.1-sol": { input: 2, cachedInput: 0.10, cacheWrite: 2.50, output: 10 },
-};
 const calls = [];
 const requests = [];
 const model = values.live ? createModelClient({
   apiKey: process.env.WALKWE_OPENAI_EVAL_API_KEY || process.env.WALKWE_OPENAI_API_KEY,
-  onUsage: item => {
-    const price = prices[item.model];
-    const uncached = item.inputTokens - item.cachedInputTokens - item.cacheWriteTokens;
-    const estimatedUsd = price ? (uncached * price.input + item.cachedInputTokens * price.cachedInput
-      + item.cacheWriteTokens * price.cacheWrite + item.outputTokens * price.output) / 1e6 : null;
-    calls.push({ ...item, estimatedUsd });
-  },
+  onUsage: item => calls.push({ ...item, estimatedUsd: estimateModelCost(item) }),
   onRequest: request => requests.push(request),
 }) : null;
 
