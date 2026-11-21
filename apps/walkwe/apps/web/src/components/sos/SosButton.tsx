@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { MapPin, MessageCircle, MessageSquareText, Phone, Share2, UserPlus, X } from 'lucide-react';
 import { activeCity } from '@walkwe/config';
 import type { LatLng } from '@walkwe/core';
-import { createSosController, type SosState } from '../../sos/controller.ts';
+import { createSosController, OPEN_SOS_VOICE, type SosState } from '../../sos/controller.ts';
 import { lineShareUrl, smsUrl, sosMessage } from '../../sos/message.ts';
 import { isIOS } from '../../pwa/install.ts';
 import { platform } from '../../services.ts';
@@ -37,6 +37,8 @@ function SosButtonInner() {
   langRef.current = lang;
   const toast = useToast();
   const [state, setState] = useState<SosState>('idle');
+  const [voiceHelp, setVoiceHelp] = useState(false);
+  const showHelp = state === 'sent' || voiceHelp;
   const [hold, setHold] = useState(0);
   const [left, setLeft] = useState(COUNTDOWN_S);
   const [fix, setFix] = useState<{ p: LatLng; accuracy: number } | null | 'pending'>(null);
@@ -60,6 +62,16 @@ function SosButtonInner() {
     [],
   );
   useEffect(() => () => ctl.reset(), [ctl]);
+  useEffect(() => {
+    const open = (event: Event) => {
+      if (!(event instanceof CustomEvent) || !event.detail) return;
+      if (state !== 'idle' && !showHelp) return;
+      if (!showHelp) setVoiceHelp(true);
+      event.detail.opened = true;
+    };
+    window.addEventListener(OPEN_SOS_VOICE, open);
+    return () => window.removeEventListener(OPEN_SOS_VOICE, open);
+  }, [state, showHelp]);
 
   // Start finding the location as soon as the hold begins, so it's ready
   // by the time the countdown ends.
@@ -81,6 +93,7 @@ function SosButtonInner() {
   const sendRef = useRef<HTMLDivElement>(null);
   /** Back to idle, focus returned to the SOS button (it was hidden meanwhile). */
   const close = () => {
+    setVoiceHelp(false);
     ctl.reset();
     requestAnimationFrame(() => fabRef.current?.focus());
   };
@@ -93,11 +106,11 @@ function SosButtonInner() {
   // Keyboard: Escape cancels the countdown / closes the send screen; on the
   // send screen focus moves in and Tab stays inside it.
   useEffect(() => {
-    if (state !== 'countdown' && state !== 'sent') return undefined;
-    if (state === 'sent') requestAnimationFrame(() => sendRef.current?.querySelector<HTMLElement>('a, button')?.focus());
+    if (state !== 'countdown' && !showHelp) return undefined;
+    if (showHelp) requestAnimationFrame(() => sendRef.current?.querySelector<HTMLElement>('a, button')?.focus());
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') return state === 'countdown' ? cancel() : close();
-      if (e.key !== 'Tab' || state !== 'sent' || !sendRef.current) return;
+      if (e.key !== 'Tab' || !showHelp || !sendRef.current) return;
       const items = sendRef.current.querySelectorAll<HTMLElement>('a, button');
       const a = items[0], z = items[items.length - 1];
       if (!a || !z) return;
@@ -111,7 +124,7 @@ function SosButtonInner() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, showHelp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ring: two half-masks rotated with transform only (brief §3 motion rule).
   const right = Math.min(hold, 0.5) * 360;
@@ -126,7 +139,7 @@ function SosButtonInner() {
       accuracyM: fix && fix !== 'pending' ? fix.accuracy : null,
       selfPhone: loadSelfPhone(),
     });
-  const contacts = state === 'sent' ? loadContacts() : [];
+  const contacts = showHelp ? loadContacts() : [];
 
   return (
     <>
@@ -151,7 +164,7 @@ function SosButtonInner() {
           }
         }}
         onKeyUp={(e) => (e.key === ' ' || e.key === 'Enter') && ctl.release()}
-        hidden={state === 'countdown' || state === 'sent'}
+        hidden={state === 'countdown' || showHelp}
       >
         <span className="sos-ring" aria-hidden="true">
           <span className="sos-half sos-half--right">
@@ -205,7 +218,7 @@ function SosButtonInner() {
           document.body,
         )}
 
-      {state === 'sent' &&
+      {showHelp &&
         createPortal(
           <div ref={sendRef} className="sos-overlay sos-overlay--send" role="dialog" aria-modal="true" aria-labelledby="sos-send-title" data-testid="sos-send">
             <header className="sos-send-head">
@@ -232,7 +245,7 @@ function SosButtonInner() {
                   {t('sos.sms', { n: contacts.length })}
                 </a>
               ) : (
-                <Link className="btn sos-action" to="/contacts" onClick={() => ctl.reset()}>
+                <Link className="btn sos-action" to="/contacts" onClick={close}>
                   <span className="sos-action-ic" aria-hidden="true">
                     <UserPlus size={22} />
                   </span>

@@ -13,7 +13,7 @@ test.beforeEach(async ({ page, context }) => {
   await page.clock.resume(); // start at that time, then let it run like a real clock
 });
 
-async function startSiamToCentralWorld(page: import('@playwright/test').Page) {
+async function startSiamToCentralWorld(page: import('@playwright/test').Page, night = false) {
   await page.goto('/plan');
   // Wait until the service worker controls the page, as it would for anyone
   // who has opened the app once.
@@ -26,6 +26,7 @@ async function startSiamToCentralWorld(page: import('@playwright/test').Page) {
   await expect(page.getByRole('heading', { name: 'ไปที่ไหน' })).toBeVisible();
   await page.getByRole('searchbox', { name: 'ค้นหาสถานที่' }).fill('central');
   await page.getByTestId('search-results').getByRole('button', { name: /centralwOrld/ }).click();
+  if (night) await page.getByTestId('mode-night').click();
   await page.getByTestId('find-routes').click();
   await page.getByTestId('start-nav').click();
   await expect(page).toHaveURL(/\/navigate$/);
@@ -80,7 +81,7 @@ test('read aloud uses the distance on the current navigation step', async ({ pag
 });
 
 test('agent reads English in Thai UI and rejects a changed bilingual distance', async ({ page, context }) => {
-  test.skip(!process.env.VITE_AI_PROXY_URL, 'Run with a proxy URL to exercise the agent bootstrap.');
+  test.skip(!process.env.VITE_AI_PROXY_URL || process.env.VITE_VOICE_PROVIDER === 'openai', 'Run with a proxy URL and ElevenLabs enabled.');
   const recorded = await recordDeviceSpeech(page);
   const toolResults: { status: string; distance_m: number; speak_text: string }[] = [];
   const requests: string[] = [];
@@ -132,6 +133,86 @@ test('agent reads English in Thai UI and rejects a changed bilingual distance', 
   expect(toolResults[1]).toMatchObject({ status: 'ok', distance_m: 392 });
   expect(toolResults[1]!.speak_text).toContain('เดินต่อ 390 เมตร');
   expect(toolResults[1]!.speak_text).toContain('Walk 390 metres');
+});
+
+test('GPT Live speaks verified distances in both languages and only opens SOS', async ({ page, context }) => {
+  test.skip(!process.env.VITE_AI_PROXY_URL || process.env.VITE_VOICE_PROVIDER !== 'openai', 'Run with the GPT Live build.');
+  const recorded = await recordDeviceSpeech(page);
+  const speech: { lang: string; text: string }[] = [];
+  await context.route('**/voice/live', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ screen: 'navigate', lang: 'th', sdp: 'v=0\r\n' });
+    await route.fulfill({ json: { sdp: 'v=0\r\n' }, status: 201 });
+  });
+  await context.route('**/voice/live/speak', async (route) => {
+    speech.push(route.request().postDataJSON());
+    await route.fulfill({ status: 409 }); // The app uses the device voice if generated text differs.
+  });
+  await page.addInitScript(() => {
+    const track = { enabled: false, stop: () => { track.enabled = false; } };
+    const stream = { getAudioTracks: () => [track], getTracks: () => [track] };
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', { value: async () => stream });
+    class Channel extends EventTarget {
+      readyState = 'open';
+      emit(event: object) { this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(event) })); }
+      send(raw: string) { if (JSON.parse(raw).type === 'session.close') this.emit({ type: 'session.closed' }); }
+      close() { this.readyState = 'closed'; }
+    }
+    const channel = new Channel();
+    class Peer extends EventTarget {
+      iceGatheringState = 'complete';
+      localDescription = { sdp: 'v=0\r\n' };
+      addTrack() {}
+      createDataChannel() { return channel; }
+      async createOffer() { return this.localDescription; }
+      async setLocalDescription() {}
+      async setRemoteDescription() { channel.emit({ type: 'session.started' }); }
+      close() { channel.close(); }
+    }
+    Object.defineProperty(window, 'RTCPeerConnection', { value: Peer });
+    Object.defineProperty(window, 'emitVoiceTest', { value: (data: object) => channel.emit(data) });
+  });
+
+  await startSiamToCentralWorld(page);
+  await page.getByRole('button', { name: 'คุยกับ Walk We' }).click();
+  await expect(page.getByText('ฟังอยู่ ลองถามเรื่องเส้นทาง')).toBeVisible();
+  const tool = (name: string, args: object, id: string) => page.evaluate((data) => {
+    (window as Window & { emitVoiceTest?: (event: object) => void }).emitVoiceTest?.(data);
+  }, { type: 'response.event', delegation_id: id, event: { type: 'response.output_item.done',
+    item: { type: 'function_call', name, call_id: id, arguments: JSON.stringify(args) },
+  } });
+  await tool('repeat_instruction', { which: 'last_instruction', language: 'en', distance_m: 999 }, 'invalid');
+  await expect(page.getByText(/คำสั่งนี้ยังใช้ไม่ได้/)).toBeVisible();
+  expect(await recorded()).toEqual([]);
+
+  await tool('repeat_instruction', { which: 'last_instruction', language: 'en' }, 'english');
+  await expect.poll(recorded).toEqual([{ lang: 'en-GB', text: expect.stringContaining('Walk 10 metres') }]);
+  await tool('repeat_instruction', { which: 'last_instruction', language: 'both' }, 'both');
+  await expect.poll(async () => (await recorded()).slice(1)).toEqual([
+    { lang: 'th-TH', text: expect.stringContaining('เดินต่อ 10 เมตร') },
+    { lang: 'en-GB', text: expect.stringContaining('Walk 10 metres') },
+  ]);
+  expect(speech.map((part) => part.lang)).toEqual(['en', 'th', 'en']);
+
+  await tool('companion_call', { state: 'start', language: 'th' }, 'companion');
+  await expect(page.getByText('เปิดไมค์ไว้แล้ว ถามเรื่องทางเดินได้')).toBeVisible();
+
+  await tool('open_sos_sheet', { reason: 'user_asked', language: 'en' }, 'help');
+  await expect(page.getByTestId('sos-send')).toBeVisible();
+  await expect(page.getByTestId('sos-countdown')).toHaveCount(0);
+  await expect(page.getByTestId('dial-191')).toHaveAttribute('href', 'tel:191');
+});
+
+test('GPT Live build keeps the optional arrival lighting answer on the device', async ({ page, context }) => {
+  test.skip(process.env.VITE_VOICE_PROVIDER !== 'openai', 'Run with the GPT Live build.');
+  await context.route('**/explain', (route) => route.fulfill({ status: 503 }));
+  await startSiamToCentralWorld(page, true);
+  const steps = await page.evaluate(() => JSON.parse(localStorage.getItem('ww_nav')!).steps.length as number);
+  const finish = page.getByTestId('im-here');
+  for (let step = 0; step < steps; step++) await finish.click();
+  const question = page.getByTestId('arrival-lighting');
+  await question.getByRole('button', { name: 'มีไฟบางช่วง' }).click();
+  await expect(question.getByRole('status').filter({ hasText: 'บันทึกคำตอบไว้บนอุปกรณ์แล้ว' })).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ww_last_lighting')!))).toEqual({ id: expect.any(String), answer: 'dim' });
 });
 
 test('airplane mode mid-route: steps, photos, map and reload keep working', async ({ page, context }) => {

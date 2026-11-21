@@ -12,6 +12,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { createLiveSession, liveOffer, speakWithOpenAI } from './live.ts';
 import {
   explanationMatchesFacts,
   explanationSchema,
@@ -37,6 +38,8 @@ export interface Env {
   ELEVENLABS_MODEL?: string;
   ELEVENLABS_AGENT_ID?: string;
   ELEVENLABS_AGENT_ORIGIN?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_LIVE_ORIGIN?: string;
 }
 
 /** /speak body: short text to read aloud (a navigation step, a route summary). */
@@ -104,11 +107,11 @@ function corsFor(req: Request, env: Env): HeadersInit | null {
   };
 }
 
-async function readJson(req: Request): Promise<unknown> {
+async function readJson(req: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   const len = Number(req.headers.get('content-length') ?? '0');
-  if (len > MAX_BODY_BYTES) throw new Error('too_large');
+  if (len > maxBytes) throw new Error('too_large');
   const text = await req.text();
-  if (text.length > MAX_BODY_BYTES) throw new Error('too_large');
+  if (text.length > maxBytes) throw new Error('too_large');
   return JSON.parse(text);
 }
 
@@ -151,7 +154,7 @@ export default {
     if (req.method !== 'POST') return json({ error: 'method' }, 405, cors);
 
     const path = new URL(req.url).pathname;
-    if (!['/parse', '/explain', '/speak', '/voice/session'].includes(path)) return json({ error: 'not_found' }, 404, cors);
+    if (!['/parse', '/explain', '/speak', '/voice/session', '/voice/live', '/voice/live/speak'].includes(path)) return json({ error: 'not_found' }, 404, cors);
 
     // Rate limit per client address (used only as a limiter key, never stored or logged).
     const who = req.headers.get('cf-connecting-ip') ?? 'unknown';
@@ -171,6 +174,25 @@ export default {
       } catch {
         return json({ error: 'bad_request' }, 400, cors);
       }
+    }
+
+    if (path === '/voice/live' || path === '/voice/live/speak') {
+      const noStore = { ...cors, 'cache-control': 'no-store' };
+      const key = env.OPENAI_API_KEY;
+      if (!key || req.headers.get('origin') !== env.OPENAI_LIVE_ORIGIN) return json({ error: 'unavailable' }, 503, noStore);
+      if (path === '/voice/live') {
+        const offer = await readJson(req, 65_536).then((value) => liveOffer.safeParse(value), () => null);
+        if (!offer?.success) return json({ error: 'bad_request' }, 400, noStore);
+        try { return json(await createLiveSession(key, offer.data), 201, noStore); }
+        catch { return json({ error: 'upstream' }, 502, noStore); }
+      }
+      const speech = await readJson(req).then((value) => speakSchema.safeParse(value), () => null);
+      if (!speech?.success) return json({ error: 'bad_request' }, 400, noStore);
+      try {
+        const audio = await speakWithOpenAI(key, speech.data.text, speech.data.lang);
+        if (!audio) return json({ error: 'unverified_audio' }, 409, noStore);
+        return new Response(audio, { headers: { ...noStore, 'content-type': 'audio/wav' } });
+      } catch { return json({ error: 'upstream' }, 502, noStore); }
     }
 
     if (path === '/voice/session') {

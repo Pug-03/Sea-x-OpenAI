@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Accessibility, CircleCheck, LocateFixed, MapPin, Mic, Moon, Sun } from 'lucide-react';
 import { AccessPanel } from '../components/AccessPanel.tsx';
-import { useAccess } from '../store/access.ts';
+import { setAccess, useAccess } from '../store/access.ts';
 import { activeCity } from '@walkwe/config';
 import {
   bboxContains,
@@ -24,6 +24,9 @@ import { searchLandmarks } from '../components/plan/landmarks.ts';
 import { LogoMark } from '../components/Logo.tsx';
 import { useSpeech } from '../utils/useSpeech.ts';
 import type { RouteIntent } from '@walkwe/core/ai';
+import { speechParts, type VoiceActions } from '@walkwe/core/voice';
+import { LiveVoice } from '../components/LiveVoice.tsx';
+import { verifiedRouteSummary } from '../voice/route.ts';
 import { LazyMapView } from '../components/MapView.lazy.ts';
 import { MapBoundary } from '../components/MapBoundary.tsx';
 import { PickerBody, PickerHeader } from '../components/plan/PlacePicker.tsx';
@@ -337,11 +340,12 @@ export default function Plan() {
     const [p] = local.length ? local : await geocoder.search({ text: q, lang, near: activeCity.center }).catch(() => []);
     return p ? { id: p.id, name: p.name, detail: p.detail, location: p.location, kind: 'search' } : null;
   };
-  const onIntent = async (intent: RouteIntent): Promise<string | null> => {
+  const onIntent = async (intent: RouteIntent, prefill?: AbortSignal): Promise<string | null> => {
     const [nextTo, nextFrom] = await Promise.all([
       intent.to.kind === 'place' ? lookUp(intent.to.query) : Promise.resolve(null),
       intent.from.kind === 'place' ? lookUp(intent.from.query) : Promise.resolve(null),
     ]);
+    if (prefill?.aborted) return '';
     if (intent.to.kind === 'place' && !nextTo) return t('ai.ask.notFound', { q: intent.to.query });
     if (intent.from.kind === 'place' && !nextFrom) return t('ai.ask.notFound', { q: intent.from.query });
     // Same check as picking by hand: say so before routing, not after a failed route.
@@ -366,6 +370,10 @@ export default function Plan() {
     }
     if (nextTo) setTo(nextTo);
     if (nextFrom) setFrom(nextFrom);
+    if (prefill) {
+      if (intent.from.kind === 'current_location' && !nextFrom) setFrom(null);
+      return null; // The user confirms the proposed endpoints with the existing form.
+    }
     const summary = [intent.from.kind === 'current_location' ? t('ai.ask.here') : nextFrom?.name, nextTo?.name].filter(Boolean).join(' → ');
     const bits = [
       summary,
@@ -393,13 +401,15 @@ export default function Plan() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const navigateTo = useGo();
-  const startNavigation = async () => {
-    if (routingState?.status !== 'done' || !from || !to) return;
+  const startNavigation = async (signal?: AbortSignal) => {
+    if (routingState?.status !== 'done' || !from || !to) return false;
     const route = routingState.result.routes[selectedRoute];
-    if (!route) return;
+    if (!route) return false;
     const guides = await loadGuides().catch(() => []);
+    if (signal?.aborted) return false;
     saveSession(buildSession(route, routingState.mode, from.location, to.location, guides, to.name));
     navigateTo('/navigate');
+    return true;
   };
 
   const leaveResults = () => {
@@ -408,6 +418,55 @@ export default function Plan() {
     setMode({ type: 'overview' });
     setSnap('half');
   };
+
+  const planVoice: VoiceActions = {
+    plan_trip: async ({ utterance, intent, language }, signal) => {
+      if (intent.clarification || intent.from.kind === 'unspecified' || intent.to.kind !== 'place') {
+        return speechParts(language, (locale) => locale === 'th' ? 'บอกจุดเริ่มต้นกับจุดหมายที่ต้องการเดินได้ไหมครับ' : 'Where would you like to start and finish your walk?');
+      }
+      const normalized = (text: string) => text.normalize('NFKC').toLowerCase().replace(/[\s\p{P}]+/gu, '');
+      const said = normalized(utterance);
+      if ([intent.from, intent.to].some((end) => end.kind === 'place' && (!normalized(end.query) || !said.includes(normalized(end.query))))) return [];
+      const issue = await onIntent(intent, signal);
+      if (issue != null) return [];
+      return speechParts(language, (locale) => locale === 'th' ? 'ตรวจจุดเริ่มต้นกับจุดหมายบนหน้าจอก่อนกดหาเส้นทางครับ' : 'Check the start and destination on screen before finding routes.');
+    },
+  };
+
+  const resultsVoice: VoiceActions = {};
+  if (routingState?.status === 'done') {
+    const { result, mode: walkMode } = routingState;
+    const shortest = result.routes.find((route) => route.kinds.includes('shortest'));
+    const select = (index: number, language: 'th' | 'en' | 'both') => {
+      const route = result.routes[index];
+      if (!route) return [];
+      setSelectedRoute(index);
+      return verifiedRouteSummary(language, route, walkMode, shortest);
+    };
+    resultsVoice.ask_trip = ({ language }) => verifiedRouteSummary(language, result.routes[selectedRoute]!, walkMode, shortest);
+    resultsVoice.select_route = ({ language, route_ref }) => select(/^[1-3]$/.test(route_ref)
+      ? Number(route_ref) - 1 : result.routes.findIndex((route) => route.kinds.some((kind) => kind === route_ref)), language);
+    resultsVoice.change_route = ({ language, change }) => {
+      if (change === 'shortest') return select(shortest ? result.routes.indexOf(shortest) : -1, language);
+      if (change === 'keep_route') return verifiedRouteSummary(language, result.routes[selectedRoute]!, walkMode, shortest);
+      if (change === 'prefer_covered') {
+        const covered = (i: number) => result.routes[i]!.runs.reduce((m, run) => m + (run.permanent ? run.lengthM : 0), 0);
+        const best = result.routes.reduce((index, _route, i) => covered(i) > covered(index) ? i : index, selectedRoute);
+        return covered(best) > 0 ? select(best, language) : [];
+      }
+      if (change === 'avoid_stairs' || change === 'prefer_lit') {
+        if (change === 'avoid_stairs') setAccess({ stepFree: true });
+        else { setModeOverride('night'); setFactors(['lit']); }
+        leaveResults();
+        return speechParts(language, (locale) => locale === 'th' ? 'ตั้งค่าแล้วครับ กดหาเส้นทางอีกครั้งได้เลย' : 'I updated the route preference. Tap Find routes to recalculate.');
+      }
+      return [];
+    };
+    resultsVoice.start_navigation = async ({ language }, signal) => {
+      if (!await startNavigation(signal)) return [];
+      return speechParts(language, (locale) => locale === 'th' ? 'เริ่มนำทางตามเส้นที่เลือกแล้วครับ' : 'Navigation has started on the selected route.');
+    };
+  }
 
   const pickTitle =
     (mode.type === 'pick' || mode.type === 'pin') && mode.slot
@@ -418,7 +477,7 @@ export default function Plan() {
   let body: React.ReactNode = null;
   if (mode.type === 'results' && routingState) {
     header = <ResultsHeader onBack={leaveResults} mode={routingState.status === 'done' ? routingState.mode : (modeOverride ?? autoMode)} />;
-    body = (
+    body = (<>
       <RouteResults
         state={routingState}
         selected={selectedRoute}
@@ -429,7 +488,8 @@ export default function Plan() {
         onStart={() => void startNavigation()}
         meta={meta}
       />
-    );
+      {routingState.status === 'done' && <LiveVoice screen="results" actions={resultsVoice} />}
+    </>);
   } else if (mode.type === 'pin') {
     header = (
       <div style={{ display: 'grid', gap: 10 }}>
@@ -543,6 +603,7 @@ export default function Plan() {
           </div>
         )}
         <AskBox onIntent={onIntent} />
+        <LiveVoice screen="plan" actions={planVoice} />
         <SavedSlots saved={places.saved} onGo={(p) => void goSaved(p)} onSet={(slot) => openPick('to', slot)} onRemove={(p) => places.remove(p.slot, p.id)} />
         {places.recents.length > 0 && (
           <section aria-label={t('plan.recent')}>

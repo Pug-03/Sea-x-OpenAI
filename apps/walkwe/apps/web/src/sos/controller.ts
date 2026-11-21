@@ -104,3 +104,5 @@ export function createSosController(o: SosOptions): SosController {
     },
   };
 }
+/** The voice agent may open help without initiating a call or a share. */
+export const OPEN_SOS_VOICE = 'ww:open-sos-help';

@@ -1,5 +1,7 @@
 # Walk We bilingual replay
 
+This walkthrough uses the ElevenLabs build. For the GPT-Live microphone and the retained Walk We tool contract, see [Voice providers](VOICE_PROVIDERS.md).
+
 Start a walk from BTS Siam to CentralWorld. On the current step, choose **ไทย**, **English**, or **ไทยและอังกฤษ**. The selection applies to replay throughout the walk. The app can read the step directly. **ให้ Walk We Agent อ่าน** asks the agent to read the same step.
 
 The proxy returns the public agent ID only for the configured origin. The browser opens one bounded text-only turn with ElevenLabs and sends a fixed replay request. Its `repeat_instruction` client tool returns the active step's distance and localized wording. The app accepts a verbatim echo and sends the original wording to speech. If the reply differs or the agent is unavailable, the device reads the same app wording. Advancing the route cancels a pending replay. The text session sends no microphone audio, coordinates, or unique trip ID. [ElevenLabs WebSocket API](https://elevenlabs.io/docs/eleven-agents/api-reference/eleven-agents/websocket)

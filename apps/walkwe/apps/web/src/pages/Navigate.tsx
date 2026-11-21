@@ -6,14 +6,17 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useGo } from '../utils/transition.ts';
 import { haversineMeters, type LatLng, type RouteStep } from '@walkwe/core';
+import { speechParts, type VoiceActions } from '@walkwe/core/voice';
 import type { PhotoManifest } from '@walkwe/data';
 import { LazyMapView } from '../components/MapView.lazy.ts';
 import { MapBoundary } from '../components/MapBoundary.tsx';
 import { InstallPrompt } from '../components/nav/InstallPrompt.tsx';
+import { ArrivalLighting } from '../components/nav/ArrivalLighting.tsx';
 import { StepCarousel } from '../components/nav/StepCarousel.tsx';
 import { PhotoViewer, StepPhoto } from '../components/nav/StepPhoto.tsx';
 import { StepVoice } from '../components/nav/StepVoice.tsx';
 import { Dialog } from '../components/ui.tsx';
+import { LiveVoice } from '../components/LiveVoice.tsx';
 import { ShareLocation } from '../components/sos/ShareLocation.tsx';
 import { env } from '../env.ts';
 import { loadPhotoManifest } from '../nav/guides.ts';
@@ -28,6 +31,7 @@ import { getAccess } from '../store/access.ts';
 import { speak, stopSpeaking } from '../utils/speak.ts';
 import { activeCity } from '@walkwe/config';
 import { formatDistance } from '../utils/format.ts';
+import { verifiedRouteSummary } from '../voice/route.ts';
 import { useDesktop } from '../utils/useDesktop.ts';
 
 const ICON: Record<RouteStep['maneuver'], typeof ArrowUp> = {
@@ -231,6 +235,7 @@ export default function Navigate() {
           <p className="sub">{t('nav.arrivedBody', { d: formatDistance(session.route.lengthM, lang), p: totalShade })}</p>
         </div>
         <InstallPrompt />
+        {session.mode === 'night' && <ArrivalLighting id={session.id} />}
         <button type="button" className="btn btn--primary nav-done" onClick={() => go('/plan', { replace: true })}>
           {t('nav.done')}
         </button>
@@ -249,6 +254,31 @@ export default function Navigate() {
   const readStep = () => {
     const speech = verifiedNavigationSpeech(repeatNavigationInstruction(session, lang), session, lang);
     if (speech) void speak(speech, lang);
+  };
+
+  const navigationVoice: VoiceActions = {
+    ask_trip: ({ language }) => verifiedRouteSummary(language, session.route, session.mode),
+    repeat_instruction: ({ language, which }) => {
+      const active = which === 'next_segment_warning' ? { ...session, index: session.index + 1 } : session;
+      const step = active.steps[active.index];
+      if (!step) return [];
+      return speechParts(language, (locale) => {
+        const proposed = repeatNavigationInstruction(active, locale);
+        const text = verifiedNavigationSpeech(proposed, active, locale);
+        if (!text) return '';
+        if (!stepClosed(step, new Date())) return text;
+        return locale === 'th' ? 'ตามข้อมูลเวลาเปิด–ปิด จุดนี้อาจปิดอยู่ครับ ตรวจที่หน้างานก่อนเดินต่อ'
+          : 'The opening-hours data suggests this passage may be closed. Check at the entrance before proceeding.';
+      });
+    },
+    stop_navigation: ({ language }) => {
+      setConfirmExit(true);
+      return speechParts(language, (locale) => locale === 'th' ? 'ยืนยันออกจากการนำทางบนหน้าจอได้เลยครับ' : 'Confirm on screen if you want to stop navigation.');
+    },
+    start_live_share: ({ language }) => {
+      setSharing(true);
+      return speechParts(language, (locale) => locale === 'th' ? 'เปิดหน้าแชร์แล้วครับ เลือกผู้รับบนอุปกรณ์ได้เลย' : 'Sharing is open. Choose the recipient on your device.');
+    },
   };
 
   readStepRef.current = readStep;
@@ -331,6 +361,7 @@ export default function Navigate() {
           )}
           {toStep != null && toStep > 15 && <span className="chip">{t('nav.fromHere', { d: formatDistance(toStep, lang) })}</span>}
         </div>
+        {online && <LiveVoice key={`${session.id}:${index}`} screen="navigate" actions={navigationVoice} />}
 
         {/* Desktop has room for both: map on the left, step cards on the right. */}
         {(desktop || view === 'steps') && (
