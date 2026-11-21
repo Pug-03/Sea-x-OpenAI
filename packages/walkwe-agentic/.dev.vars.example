@@ -1,0 +1,4 @@
+# Local Wrangler development only.
+OPENAI_API_KEY=
+WALKWE_STEP_TOKEN=
+WALKWE_STEP_STATE_KEY=

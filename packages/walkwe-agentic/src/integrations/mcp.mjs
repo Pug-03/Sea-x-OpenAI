@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
-import { compareDepartureTimes, replay, segmentEvidence } from "./core.mjs";
-import { version } from "./fixture.mjs";
-import { objectSchema } from "./model.mjs";
+import { compareDepartureTimes, replay, segmentEvidence } from "../routing/core.mjs";
+import { version } from "../routing/fixture.mjs";
+import { objectSchema } from "./openai.mjs";
 
 const annotation = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const tools = [

@@ -1,8 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
-import { contextVersion } from "../src/context.mjs";
-import { version } from "../src/fixture.mjs";
-import { createModelClient, estimateModelCost, modelProfiles } from "../src/model.mjs";
+import { contextVersion } from "../src/agentic-workflow/context.mjs";
+import { version } from "../src/routing/fixture.mjs";
+import { createModelClient, estimateModelCost, modelProfiles } from "../src/integrations/openai.mjs";
 import { liveCases, localCases } from "./cases.mjs";
 
 const { values } = parseArgs({ options: {

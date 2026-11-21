@@ -1,5 +1,5 @@
-import { evidenceAge } from "./context.mjs";
-import { agentConfig } from "./config.mjs";
+import { evidenceAge } from "../agentic-workflow/context.mjs";
+import { agentConfig } from "../config.mjs";
 import { edges, outsidePilotNames, places, referenceDate, version } from "./fixture.mjs";
 
 const radians = Math.PI / 180;

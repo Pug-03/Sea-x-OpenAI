@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { verifyFinish } from "../../verify/index.mjs";
-import { plannerContext } from "../src/context.mjs";
-import { compareDepartureTimes, normalizeSun, planRoute, replay, segmentEvidence, shadowLength } from "../src/core.mjs";
-import { auditPhoto, draftLightingProposal, draftNews, reviewProposal, stewardReview } from "../src/evidence.mjs";
-import { createModelClient } from "../src/model.mjs";
-import { createPreviewServer } from "../src/server.mjs";
-import { acknowledgeSos, newSos, submitSos, transitionSos } from "../src/sos.mjs";
-import { createVoiceTools, getSignedVoiceUrl } from "../src/voice.mjs";
-import { askTrip, createWorkflows } from "../src/workflows.mjs";
+import { plannerContext } from "../src/agentic-workflow/context.mjs";
+import { compareDepartureTimes, normalizeSun, planRoute, replay, segmentEvidence, shadowLength } from "../src/routing/core.mjs";
+import { auditPhoto, draftLightingProposal, draftNews, reviewProposal, stewardReview } from "../src/evidence/review.mjs";
+import { createModelClient } from "../src/integrations/openai.mjs";
+import { createPreviewServer } from "../src/workers/preview.mjs";
+import { acknowledgeSos, newSos, submitSos, transitionSos } from "../src/safety/sos.mjs";
+import { createVoiceTools, getSignedVoiceUrl } from "../src/integrations/voice.mjs";
+import { askTrip, createWorkflows } from "../src/agentic-workflow/agents.mjs";
 
 const night = { from: "siam", to: "central", time: "21:00", mode: "night" };
 const toolCall = (name, args, id) => [{ type: "function_call", name, arguments: JSON.stringify(args), call_id: id }];
@@ -286,7 +286,7 @@ test("MCP exposes read-only tools for the named fixture and rejects unknown vers
     { id: 3, method: "tools/call", params: { name: "replay_demo_trip", arguments: { mode: "night", dataset_version: "siam-sandbox-1" } } },
     { id: 4, method: "tools/call", params: { name: "get_segment_evidence", arguments: { segment_id: "lane-gap", dataset_version: "live" } } },
   ];
-  const proc = spawnSync(process.execPath, ["src/mcp.mjs"], {
+  const proc = spawnSync(process.execPath, ["src/integrations/mcp.mjs"], {
     cwd: new URL("../", import.meta.url), encoding: "utf8",
     input: commands.map(cmd => JSON.stringify({ jsonrpc: "2.0", ...cmd })).join("\n") + "\n",
   });

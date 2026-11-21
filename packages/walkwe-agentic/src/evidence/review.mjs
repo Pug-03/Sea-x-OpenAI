@@ -1,4 +1,4 @@
-import { modelProfiles, objectSchema, stringEnum } from "./model.mjs";
+import { modelProfiles, objectSchema, stringEnum } from "../integrations/openai.mjs";
 
 const lightValues = ["dark", "dim", "lit", "cannot_tell"];
 const photoSchema = objectSchema({

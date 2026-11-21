@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createAgentsResearch } from "./agents.mjs";
-import { createResearchClientTool } from "./browser.mjs";
-import { createResearchStore } from "./store.mjs";
-import { createResearchRoutes } from "./worker.mjs";
+import { createAgentsResearch } from "../src/agents.mjs";
+import { createResearchClientTool } from "../src/browser.mjs";
+import { createResearchStore } from "../src/store.mjs";
+import { createResearchRoutes } from "../src/worker.mjs";
 
 const route = "/agents/research";
 const publicName = "ซอยเกษมสันต์ 1 ช่วงปากซอยฝั่งถนนพระรามที่ 1";

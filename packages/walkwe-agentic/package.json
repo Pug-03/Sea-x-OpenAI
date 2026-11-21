@@ -4,9 +4,9 @@
   "type": "module",
   "engines": {"node": ">=22"},
   "scripts": {
-    "start": "node src/server.mjs",
+    "start": "node src/workers/preview.mjs",
     "test": "node --test",
-    "mcp": "node src/mcp.mjs",
+    "mcp": "node src/integrations/mcp.mjs",
     "eval": "node evals/run.mjs"
   }
 }

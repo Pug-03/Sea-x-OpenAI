@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createVoiceClientTools } from "../src/voice-client.mjs";
+import { createVoiceClientTools } from "../src/integrations/voice-client.mjs";
 
 const spoken = { status: "ok", speak_text: "เปิดหน้าที่ขอแล้วครับ" };
 

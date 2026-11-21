@@ -1,4 +1,4 @@
-import { agentConfig } from "./config.mjs";
+import { agentConfig } from "../config.mjs";
 
 export const contextVersion = "walkwe-context-v2";
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planRoute, rankUnknowns, segmentEvidence, suggestDeparture, worthwhileDetour } from "../src/core.mjs";
-import { edges } from "../src/fixture.mjs";
+import { planRoute, rankUnknowns, segmentEvidence, suggestDeparture, worthwhileDetour } from "../src/routing/core.mjs";
+import { edges } from "../src/routing/fixture.mjs";
 
 const trip = { from: "siam", to: "central", time: "13:12", mode: "day" };
 

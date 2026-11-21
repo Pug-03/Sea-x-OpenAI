@@ -1,6 +1,6 @@
 {
   "fixture": "siam-sandbox-1",
-  "contextVersion": "walkwe-context-v1",
+  "contextVersion": "walkwe-context-v2",
   "models": {
     "intent": {
       "model": "gpt-6.1-terra",
@@ -33,25 +33,31 @@
     "fixture": {
       "executed": 34,
       "passed": 34,
+      "accuracyPct": 100,
       "p50Ms": 0,
-      "p95Ms": 1
+      "p95Ms": 1,
+      "maxMs": 1
     },
     "mock": {
       "executed": 18,
       "passed": 18,
+      "accuracyPct": 100,
       "p50Ms": 0,
-      "p95Ms": 16
+      "p95Ms": 17,
+      "maxMs": 17
     },
     "live": {
       "executed": 0,
       "passed": 0,
+      "accuracyPct": null,
       "p50Ms": null,
-      "p95Ms": null
+      "p95Ms": null,
+      "maxMs": null
     }
   },
   "trapsCaught": 14,
   "trapsExecuted": 14,
-  "liveRun": "skipped_missing_key",
+  "liveRun": "not_requested",
   "records": [
     {
       "id": "I01",
@@ -211,7 +217,7 @@
       "group": "worker",
       "trap": false,
       "passed": true,
-      "elapsedMs": 0
+      "elapsedMs": 1
     },
     {
       "id": "R04",
@@ -291,7 +297,7 @@
       "group": "harness",
       "trap": false,
       "passed": true,
-      "elapsedMs": 9
+      "elapsedMs": 10
     },
     {
       "id": "H02",
@@ -299,15 +305,16 @@
       "group": "harness",
       "trap": false,
       "passed": true,
-      "elapsedMs": 1,
+      "elapsedMs": 4,
       "loop": {
-        "plannerSteps": 2,
-        "toolCalls": 2,
+        "plannerSteps": 5,
+        "toolCalls": 5,
         "evidenceReads": 1,
         "rejectedFinishes": 0,
         "criticCalls": 1,
         "status": "verified",
-        "elapsedMs": 0
+        "elapsedMs": 4,
+        "goalState": "needs_user"
       }
     },
     {
@@ -316,15 +323,16 @@
       "group": "harness",
       "trap": false,
       "passed": true,
-      "elapsedMs": 0,
+      "elapsedMs": 2,
       "loop": {
-        "plannerSteps": 3,
-        "toolCalls": 3,
+        "plannerSteps": 6,
+        "toolCalls": 6,
         "evidenceReads": 1,
         "rejectedFinishes": 1,
         "criticCalls": 1,
         "status": "verified",
-        "elapsedMs": 0
+        "elapsedMs": 2,
+        "goalState": "needs_user"
       }
     },
     {
@@ -333,16 +341,17 @@
       "group": "harness",
       "trap": true,
       "passed": true,
-      "elapsedMs": 0,
+      "elapsedMs": 1,
       "fallback": "repeated_tool_call",
       "loop": {
-        "plannerSteps": 2,
-        "toolCalls": 2,
+        "plannerSteps": 3,
+        "toolCalls": 3,
         "evidenceReads": 1,
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {
@@ -360,7 +369,8 @@
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {
@@ -373,12 +383,13 @@
       "fallback": "tool_outside_allowlist",
       "loop": {
         "plannerSteps": 1,
-        "toolCalls": 1,
+        "toolCalls": 0,
         "evidenceReads": 0,
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {
@@ -391,12 +402,13 @@
       "fallback": "invalid_tool_arguments",
       "loop": {
         "plannerSteps": 1,
-        "toolCalls": 1,
+        "toolCalls": 0,
         "evidenceReads": 0,
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {
@@ -414,7 +426,8 @@
         "rejectedFinishes": 2,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {
@@ -423,16 +436,17 @@
       "group": "harness",
       "trap": true,
       "passed": true,
-      "elapsedMs": 0,
+      "elapsedMs": 1,
       "fallback": "duplicate_call_id",
       "loop": {
-        "plannerSteps": 2,
+        "plannerSteps": 3,
         "toolCalls": 2,
         "evidenceReads": 1,
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {
@@ -445,12 +459,13 @@
       "fallback": "planner_tool_limit",
       "loop": {
         "plannerSteps": 1,
-        "toolCalls": 2,
+        "toolCalls": 0,
         "evidenceReads": 0,
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "budget_limited"
       }
     },
     {
@@ -459,16 +474,17 @@
       "group": "harness",
       "trap": true,
       "passed": true,
-      "elapsedMs": 0,
+      "elapsedMs": 1,
       "fallback": "planner_step_limit",
       "loop": {
         "plannerSteps": 6,
         "toolCalls": 6,
-        "evidenceReads": 6,
+        "evidenceReads": 1,
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 1,
+        "goalState": "budget_limited"
       }
     },
     {
@@ -483,10 +499,11 @@
         "plannerSteps": 2,
         "toolCalls": 2,
         "evidenceReads": 0,
-        "rejectedFinishes": 2,
+        "rejectedFinishes": 1,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {
@@ -504,7 +521,8 @@
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "budget_limited"
       }
     },
     {
@@ -513,16 +531,17 @@
       "group": "harness",
       "trap": true,
       "passed": true,
-      "elapsedMs": 0,
+      "elapsedMs": 1,
       "fallback": "critic_rejected",
       "loop": {
-        "plannerSteps": 2,
-        "toolCalls": 2,
+        "plannerSteps": 6,
+        "toolCalls": 6,
         "evidenceReads": 1,
-        "rejectedFinishes": 0,
-        "criticCalls": 1,
+        "rejectedFinishes": 2,
+        "criticCalls": 2,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 1,
+        "goalState": "failed"
       }
     },
     {
@@ -540,7 +559,8 @@
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 16
+        "elapsedMs": 15,
+        "goalState": "failed"
       }
     },
     {
@@ -549,16 +569,17 @@
       "group": "harness",
       "trap": true,
       "passed": true,
-      "elapsedMs": 16,
+      "elapsedMs": 17,
       "fallback": "deadline",
       "loop": {
-        "plannerSteps": 2,
-        "toolCalls": 2,
+        "plannerSteps": 5,
+        "toolCalls": 5,
         "evidenceReads": 1,
         "rejectedFinishes": 0,
         "criticCalls": 1,
         "status": "fallback",
-        "elapsedMs": 16
+        "elapsedMs": 17,
+        "goalState": "budget_limited"
       }
     },
     {
@@ -576,7 +597,8 @@
         "rejectedFinishes": 0,
         "criticCalls": 0,
         "status": "fallback",
-        "elapsedMs": 0
+        "elapsedMs": 0,
+        "goalState": "failed"
       }
     },
     {

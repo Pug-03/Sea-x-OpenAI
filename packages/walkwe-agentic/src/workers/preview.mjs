@@ -1,11 +1,11 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
-import { compareDepartureTimes } from "./core.mjs";
-import { edges, referenceDate, version } from "./fixture.mjs";
-import { draftLightingProposal, draftNews, stewardReview } from "./evidence.mjs";
-import { createModelClient, modelProfiles } from "./model.mjs";
-import { getSignedVoiceUrl } from "./voice.mjs";
-import { createWorkflows } from "./workflows.mjs";
+import { compareDepartureTimes } from "../routing/core.mjs";
+import { edges, referenceDate, version } from "../routing/fixture.mjs";
+import { draftLightingProposal, draftNews, stewardReview } from "../evidence/review.mjs";
+import { createModelClient, modelProfiles } from "../integrations/openai.mjs";
+import { getSignedVoiceUrl } from "../integrations/voice.mjs";
+import { createWorkflows } from "../agentic-workflow/agents.mjs";
 
 const segmentIds = edges.map(edge => edge.id);
 const localHost = /^(?:localhost|127\.0\.0\.1)(?::\d{1,5})?$/;

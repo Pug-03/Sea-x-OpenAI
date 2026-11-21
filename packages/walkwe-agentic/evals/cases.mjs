@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { collectEvidence, contextVersion, plannerContext } from "../src/context.mjs";
-import { compareDepartureTimes, planRoute, replay } from "../src/core.mjs";
-import { draftLightingProposal, draftNews } from "../src/evidence.mjs";
-import { runPlannerHarness } from "../src/harness.mjs";
-import { createModelClient } from "../src/model.mjs";
-import { newSos, submitSos, transitionSos } from "../src/sos.mjs";
-import { createVoiceTools } from "../src/voice.mjs";
-import { createWorkflows } from "../src/workflows.mjs";
+import { collectEvidence, contextVersion, plannerContext } from "../src/agentic-workflow/context.mjs";
+import { compareDepartureTimes, planRoute, replay } from "../src/routing/core.mjs";
+import { draftLightingProposal, draftNews } from "../src/evidence/review.mjs";
+import { runPlannerHarness } from "../src/agentic-workflow/harness/loop.mjs";
+import { createModelClient } from "../src/integrations/openai.mjs";
+import { newSos, submitSos, transitionSos } from "../src/safety/sos.mjs";
+import { createVoiceTools } from "../src/integrations/voice.mjs";
+import { createWorkflows } from "../src/agentic-workflow/agents.mjs";
 
 const night = { from: "siam", to: "central", mode: "night", time: "21:00" };
 const day = { ...night, mode: "day", time: "12:00" };

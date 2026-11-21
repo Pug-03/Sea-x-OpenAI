@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createAgentStepHandler } from "../src/worker.mjs";
+import { createAgentStepHandler } from "../src/workers/agent-step.mjs";
 
 const env = {
   WALKWE_STEP_TOKEN: "test-worker-bearer-value-with-at-least-thirty-two",
