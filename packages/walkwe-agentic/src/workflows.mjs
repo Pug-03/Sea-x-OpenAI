@@ -1,5 +1,6 @@
 import { collectEvidence, instructions, intentContext, plannerContext } from "./context.mjs";
-import { companionNotice, formatDecision, hasRouteMarkers, parseIntent, planRoute, voiceText } from "./core.mjs";
+import { agentConfig } from "./config.mjs";
+import { companionNotice, formatDecision, hasRouteMarkers, parseIntent, planRoute, rankUnknowns, suggestDeparture, voiceText } from "./core.mjs";
 import { places as fixturePlaces } from "./fixture.mjs";
 import { runPlannerHarness } from "./harness.mjs";
 import { modelProfiles, objectSchema, stringEnum } from "./model.mjs";
@@ -12,7 +13,7 @@ const intentSchema = objectSchema({
   time: placeValue, noStairs: { type: "boolean" },
 });
 const companionSchema = objectSchema({ action: stringEnum("silent", "warn", "offer_replan") });
-const noticeLimit = 2;
+const noticeLimit = agentConfig.companionMaxWarnings;
 const stateError = reason => ({ status: reason, decision: "ABSTAIN", routes: [] });
 
 export function createWorkflows({ model = null, route = planRoute, localIntent = parseIntent, places = fixturePlaces } = {}) {
@@ -66,9 +67,12 @@ export function createWorkflows({ model = null, route = planRoute, localIntent =
     if (!useModel || !model) return fallback;
     const facts = plannerContext(request, result);
     if (!facts) return { ...fallback, fallback: "context_budget" };
-    const { verified, trace, loop, fallback: reason } = await runPlannerHarness({ model, result, facts, evidence, signal });
+    const { verified, trace, loop, final, question, fallback: reason } = await runPlannerHarness({
+      model, result, facts, evidence, signal, places, rankUnknowns,
+      suggestDeparture: route === planRoute ? (routeId, delay) => suggestDeparture(request, routeId, delay, snapshot) : undefined,
+    });
     return verified
-      ? { ...fallback, source: "verified_planner", model: modelProfiles.planner.model, trace, loop }
+      ? { ...fallback, source: "verified_planner", model: modelProfiles.planner.model, trace, loop, final, clarification: question }
       : { ...fallback, trace, loop, fallback: reason };
   }
 

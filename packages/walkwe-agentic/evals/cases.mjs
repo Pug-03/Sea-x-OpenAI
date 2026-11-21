@@ -13,9 +13,23 @@ const day = { ...night, mode: "day", time: "12:00" };
 const base = replay();
 const isolated = createWorkflows();
 const tool = (name, args, callId) => ({ type: "function_call", name, arguments: JSON.stringify(args), call_id: callId });
-const read = (segment = "lane-gap", id = "read") => tool("get_segment_evidence", { segment_id: segment }, id);
-const draft = (override = {}) => ({ route_id: base.recommendedId, decision: base.decision,
-  evidence_ids: ["lane-gap"], reason: "lighting_unknown", ...override });
+const routeIds = base.routes.map(route => route.id);
+const plan = () => tool("plan_routes", { origin: { kind: "place", place_id: "siam" },
+  destination_place_id: "central", depart_at: "now", mode: "night", preference: "balanced", avoid_stairs: false,
+  night_factors: ["lit"] }, "plan");
+const stress = () => tool("stress_test_route", { route_ids: routeIds }, "stress");
+const ask = () => tool("ask_user", { kind: "preference", text: "อยากเดินตรงหรืออ้อมเส้นที่มีข้อมูลไฟครบกว่า",
+  options: [{ label: "เดินตรง", ref: base.stress.optimisticId }, { label: "มีข้อมูลไฟครบกว่า", ref: base.stress.pessimisticId }] }, "ask");
+const read = (segment = "lane-gap", id = "read") => tool("get_segment_evidence", { segment_ids: [segment], factor: "lighting" }, id);
+const draft = (override = {}) => ({
+  recommended_route_id: base.recommendedId, decision: base.decision, verdict: "recommend_with_caveat",
+  depends_on_segment_ids: ["lane-gap"],
+  claims: [{ claim_id: "light", kind: "lighting_unknown", evidence_ids: ["lane-gap"], placeholders: [] }],
+  text: "บางช่วงยังไม่มีข้อมูลไฟ ลองเลือกทางตามที่สบายใจ",
+  card_notes: base.routes.map(route => ({ route_id: route.id,
+    trust: route.segments.some(segment => segment.id === "lane-gap") ? "depends_on" : "stable", note: "เปิดดูข้อมูลรายช่วงได้" })),
+  unknowns: ["lighting"], tool_errors_acknowledged: [], language: "th", ...override,
+});
 const finish = (override, id = "finish") => tool("finish_trip", draft(override), id);
 const structured = value => ({ type: "message", content: [{ type: "output_text", text: JSON.stringify(value) }] });
 const readResult = request => JSON.parse(request.input.at(-1).output);
@@ -27,7 +41,7 @@ const mocked = (turns, critic = () => ({ verdict: "accept" })) => {
     fetchImpl: async (_, options) => {
       const body = JSON.parse(options.body);
       assert.equal(body.store, false);
-      if (body.tools) {
+      if (body.model === "gpt-6.1-terra") {
         assert.equal(body.model, "gpt-6.1-terra");
         assert.deepEqual(body.reasoning, { effort: "high" });
         assert.equal(body.max_output_tokens, 4096);
@@ -41,8 +55,18 @@ const mocked = (turns, critic = () => ({ verdict: "accept" })) => {
       assert.equal(body.model, "gpt-6.1-sol");
       assert.deepEqual(body.reasoning, { effort: "high" });
       assert.equal(body.max_output_tokens, 6144);
-      assert.equal(body.text.format.strict, true);
-      return new Response(JSON.stringify({ status: "completed", output: [structured(critic(body))] }));
+      assert.ok(body.tools.every(definition => definition.strict && !definition.parameters.additionalProperties));
+      const context = JSON.parse(body.input[0].content);
+      const output = body.input.length === 1 && context.segment_evidence.length
+        ? tool("get_segment_evidence", {
+          segment_ids: [...new Set(context.segment_evidence.map(item => item.segment_id))],
+          factor: context.segment_evidence[0].factor,
+        }, "critic-read")
+        : tool("finish_review", {
+          claim_checks: context.draft.claims.map(claim => ({ claim_id: claim.claim_id, result: "supported", reason: "ok", evidence_ids: claim.evidence_ids })),
+          wording_flags: [], ...critic(body, context),
+        }, "critic-finish");
+      return new Response(JSON.stringify({ status: "completed", output: [output] }));
     },
   });
   return createWorkflows({ model });
@@ -204,43 +228,49 @@ const mockCases = [
       assert.equal(context.datasetVersion, base.datasetVersion);
       assert.equal(context.request.time, "21:00");
       assert.ok(!JSON.stringify(context).includes("source"));
-      return [{ type: "reasoning", id: "rs_mock", encrypted_content: "mock-encrypted", summary: [] }, read()];
-    }, body => {
-      assert.equal(readResult(body).datasetVersion, base.datasetVersion);
-      assert.equal(readResult(body).light, "unknown");
+      assert.ok(!Object.hasOwn(context, "routes"));
+      return [{ type: "reasoning", id: "rs_mock", encrypted_content: "mock-encrypted", summary: [] }, plan()];
+    }, stress(), ask(), read(), body => {
+      assert.equal(readResult(body).dataset_version, base.datasetVersion);
+      assert.equal(readResult(body).data.rows[0].value, null);
       assert.equal(body.input[1].encrypted_content, "mock-encrypted");
       return finish();
-    }], body => {
-      const payload = JSON.parse(body.input);
-      assert.equal(payload.evidence[0].light, "unknown");
+    }], (body, context) => {
+      assert.deepEqual(context.segment_evidence, [{ segment_id: "lane-gap", evidence_id: "lane-gap", factor: "lighting" }]);
+      assert.equal(readResult(body).data.rows[0].value, null);
       return { verdict: "accept" };
     });
     const result = await engine.plan(night, { useModel: true });
     assert.equal(result.source, "verified_planner");
     assert.equal(result.loop.criticCalls, 1);
+    assert.equal(result.loop.goalState, "needs_user");
+    assert.deepEqual(result.trace.filter(entry => entry.status).map(entry => entry.step),
+      ["plan_routes", "stress_test_route", "ask_user", "get_segment_evidence", "finish_trip"]);
     assert.ok(!JSON.stringify(result).includes("mock-encrypted"));
     return result;
   }},
   { id: "H03", name: "recover after evidence changes", run: async () => {
-    const engine = mocked([finish(undefined, "early"), body => {
-      assert.deepEqual(readResult(body).unread_evidence_ids, ["lane-gap"]);
+    const engine = mocked([plan(), stress(), ask(), finish(undefined, "early"), body => {
+      assert.ok(readResult(body).error.checks_failed.includes("V5"));
+      assert.ok(readResult(body).error.checks_failed.includes("V8"));
       return read();
-    }, finish()]);
+    }, finish({ text: "ช่วงนี้ยังไม่มีข้อมูลไฟ ลองเปิดหลักฐานก่อนเลือกทาง" }, "retry")]);
     const result = await engine.plan(night, { useModel: true });
     assert.equal(result.source, "verified_planner");
     assert.equal(result.loop.rejectedFinishes, 1);
     return result;
   }},
   ...[
-    ["H04", "duplicate tool", [read(), read("lane-gap", "second")], "repeated_tool_call"],
+    ["H04", "duplicate tool", [plan(), read(), read("lane-gap", "second")], "repeated_tool_call"],
     ["H05", "unavailable segment", [read("other-snapshot")], "evidence_outside_snapshot"],
     ["H06", "unauthorized operation", [tool("send_sos", {}, "blocked")], "tool_outside_allowlist"],
     ["H07", "invalid arguments JSON", [{ ...read(), arguments: "{" }], "invalid_tool_arguments"],
-    ["H08", "model claims certainty twice", [finish({ decision: "ACT" }, "a"), finish({ reason: "lighting_known" }, "b")], "verification_failed"],
-    ["H09", "duplicate call ID with new arguments", [read(), read("plaza", "read")], "duplicate_call_id"],
+    ["H08", "model claims certainty twice", [finish({ decision: "ACT" }, "a"), finish({ unknowns: [] }, "b")], "verification_failed"],
+    ["H09", "duplicate call ID with new arguments", [plan(), read(), read("plaza", "read")], "duplicate_call_id"],
     ["H10", "multiple tool calls in one step", [[read(), read("plaza", "add")]], "planner_tool_limit"],
-    ["H11", "tool steps exhausted", ["direct-west", "lane-gap", "direct-east", "plaza", "cover-middle", "cover-east"]
-      .map((segment, index) => read(segment, `call-${index}`)), "planner_step_limit"],
+    ["H11", "tool steps exhausted", [plan(), stress(), ask(), read(),
+      tool("compare_routes", { route_ids: routeIds, baseline_route_id: routeIds[0] }, "compare"),
+      tool("rank_unknowns", { route_ids: routeIds, factor: "lighting", limit: 5 }, "rank")], "planner_step_limit"],
     ["H14", "repeated unverified finish", [finish(undefined, "first"), finish(undefined, "second")], "verification_failed"],
     ["H15", "free text cannot finish", [structured({ text: "unverified figures 1234" })], "planner_tool_limit"],
   ].map(([id, name, turns, expected]) => ({ id, name, trap: true, run: async () => {
@@ -250,7 +280,10 @@ const mockCases = [
     return result;
   }})),
   { id: "H12", name: "Critic rejection", trap: true, run: async () => {
-    const result = await mocked([read(), finish()], () => ({ verdict: "reject" })).plan(night, { useModel: true });
+    const result = await mocked([plan(), stress(), ask(), read(), finish(), body => {
+      assert.equal(readResult(body).data.critic_report.verdict, "reject");
+      return finish({ text: "บางช่วงยังไม่มีข้อมูลไฟ ลองตรวจข้อมูลก่อนเลือกทาง" }, "rewrite");
+    }], () => ({ verdict: "reject" })).plan(night, { useModel: true });
     assert.equal(result.fallback, "critic_rejected");
     return result;
   }},
@@ -268,10 +301,10 @@ const mockCases = [
   { id: "H16", name: "Critic shares the Planner deadline", trap: true, run: async () => {
     const keepAlive = setTimeout(() => {}, 100);
     try {
-      let steps = 0;
+      const turns = [plan(), stress(), ask(), read(), finish()];
       const result = await runPlannerHarness({
         result: base, facts: plannerContext(night, base), evidence: collectEvidence(base), deadlineMs: 15,
-        model: { turn: async () => [++steps === 1 ? read() : finish()], structured: () => new Promise(() => {}) },
+        model: { turn: role => role === "critic" ? new Promise(() => {}) : Promise.resolve([turns.shift()]) },
       });
       assert.equal(result.fallback, "deadline");
       assert.equal(result.loop.criticCalls, 1);

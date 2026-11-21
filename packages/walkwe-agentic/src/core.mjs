@@ -181,7 +181,7 @@ function measure(path, mode, overlays, date) {
     } else {
       unknownRun = 0;
     }
-    return { ...evidence, from: edge.from, to: edge.to, shaded, covered: edge.cover };
+    return { ...evidence, from: edge.from, to: edge.to, shaded, covered: edge.cover, stairs: edge.stairs === true };
   });
   return {
     id: path.map(edge => edge.id).join("."),
