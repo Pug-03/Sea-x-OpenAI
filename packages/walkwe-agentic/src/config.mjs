@@ -1,0 +1,16 @@
+export const agentConfig = Object.freeze({
+  walkSpeedMetersPerSecond: 5 / 3.6,
+  maxDetourRatio: 1.2,
+  maxDetourSunRatio: 0.85,
+  closeCallMinutes: 2,
+  staleEvidenceDays: 90,
+  departureShiftStepMinutes: 5,
+  maxDepartureShiftMinutes: 30,
+  nightRoutingAltitude: 0,
+  plannerMaxTools: 8,
+  plannerMaxSteps: 6,
+  plannerMaxQuestions: 1,
+  plannerTimeoutMs: 20_000,
+  plannerMaxRetries: 2,
+  companionMaxWarnings: 2,
+});

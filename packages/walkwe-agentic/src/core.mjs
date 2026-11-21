@@ -1,16 +1,28 @@
 import { evidenceAge } from "./context.mjs";
+import { agentConfig } from "./config.mjs";
 import { edges, outsidePilotNames, places, referenceDate, version } from "./fixture.mjs";
 
 const radians = Math.PI / 180;
-const speed = 1.25;
+const speed = agentConfig.walkSpeedMetersPerSecond;
 const bkk = 7 * 60 * 60 * 1000;
 const banned = /ปลอดภัย|ไม่มีอันตราย|ไม่อันตราย|\b(?:safe|safer|safest|secure)\b/i;
 const statuses = new Set(["lit", "dark", "unknown"]);
+const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+const lightingPenalty = 2;
 const normalize = text => text.toLowerCase().normalize("NFKC").replace(/[\s.-]/g, "");
 const round = (value, decimals = 0) => Number(value.toFixed(decimals));
 const bearing = value => ((value % 360) + 360) % 360;
 const routeMarkers = /จาก|ไป(?:ยัง)?|\b(?:from|to)\b/giu;
 export const hasRouteMarkers = text => [...text.matchAll(routeMarkers)].length > 0;
+
+function bangkokTime(date, time) {
+  return Date.parse(`${date}T${time}:00+07:00`);
+}
+
+function bangkokDateTime(instant) {
+  return new Date(instant + bkk).toISOString().slice(0, 19) + "+07:00";
+}
 
 export function normalizeSun(position, major) {
   if (major === 1) return { altitude: position.altitude / radians, azimuth: bearing(position.azimuth / radians + 180) };
@@ -119,8 +131,7 @@ function routesFrom(from, to, start, request, previous = [from], path = [], mete
     const end = eta + edge.length / speed * 1000;
     if (edge.hours && (localHours(eta) < edge.hours[0] || localHours(end) >= edge.hours[1]
       || Math.floor((eta + bkk) / 86400000) !== Math.floor((end + bkk) / 86400000))) return [];
-    if (edge.length + meters > request.maxMinutes * 60 * speed) return [];
-    if (request.arriveBy && end > new Date(`${request.date}T${request.arriveBy}:00+07:00`).getTime()) return [];
+    if (edge.length + meters > request.maxMinutes * 60 * speed || end > request.deadline) return [];
     return routesFrom(next, to, start, request, [...previous, next], [...path, { ...edge, from, to: next, eta }], meters + edge.length);
   });
 }
@@ -181,42 +192,90 @@ function measure(path, mode, overlays, date) {
   };
 }
 
-export function planRoute(input, overlays = {}) {
-  const { from, to, time, preference } = input;
+function prepareTrip(input) {
+  if (!input || typeof input !== "object") return { status: "invalid" };
+  const { from, to, time, arriveBy, maxMinutes } = input;
   const date = input.date ?? referenceDate;
-  if (!places.some(p => p.id === from) || !places.some(p => p.id === to)) return { status: "out_of_coverage", decision: "ABSTAIN" };
-  if (from === to || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time) || !/^\d{4}-\d{2}-\d{2}$/.test(date)
-    || (input.arriveBy && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(input.arriveBy))) {
-    return { status: "invalid", decision: "ABSTAIN" };
+  if (!places.some(p => p.id === from) || !places.some(p => p.id === to)) return { status: "out_of_coverage" };
+  if (from === to || !timePattern.test(time) || !datePattern.test(date)
+    || (arriveBy && !timePattern.test(arriveBy))
+    || (maxMinutes != null && (!Number.isFinite(maxMinutes) || maxMinutes <= 0))) {
+    return { status: "invalid" };
   }
-  const instant = Date.parse(`${date}T${time}:00+07:00`);
-  if (!Number.isFinite(instant) || new Date(instant + bkk).toISOString().slice(0, 10) !== date) {
-    return { status: "invalid", decision: "ABSTAIN" };
-  }
-  const mode = ["day", "night"].includes(input.mode) ? input.mode : pilotSun(instant).altitude >= 0 ? "day" : "night";
-  const maxMinutes = input.maxMinutes ?? 60;
-  if (!Number.isFinite(maxMinutes) || maxMinutes <= 0) return { status: "invalid", decision: "ABSTAIN" };
-  const paths = routesFrom(from, to, instant, { ...input, maxMinutes, date });
+  const instant = bangkokTime(date, time);
+  if (!Number.isFinite(instant) || !bangkokDateTime(instant).startsWith(date)) return { status: "invalid" };
+  const mode = ["day", "night"].includes(input.mode) ? input.mode
+    : pilotSun(instant).altitude >= agentConfig.nightRoutingAltitude ? "day" : "night";
+  return { status: "ok", date, instant, mode, access: {
+    noStairs: input.noStairs, maxMinutes: maxMinutes ?? Infinity, deadline: arriveBy ? bangkokTime(date, arriveBy) : Infinity,
+  } };
+}
+
+function pickRoute(routes, score) {
+  return [...routes].sort((a, b) => score(a) - score(b) || a.meters - b.meters
+    || a.id.localeCompare(b.id, "en"))[0];
+}
+
+const optimisticCost = route => route.meters + route.dark * lightingPenalty;
+const pessimisticCost = route => optimisticCost(route) + route.unknown * lightingPenalty;
+
+export function worthwhileDetour(route, shortest) {
+  return Number.isFinite(route.sunMinutes) && Number.isFinite(shortest.sunMinutes)
+    && route.meters <= shortest.meters * agentConfig.maxDetourRatio
+    && route.sunMinutes < shortest.sunMinutes
+    && route.sunMinutes <= shortest.sunMinutes * agentConfig.maxDetourSunRatio;
+}
+
+export function rankUnknowns(routes, factor, limit) {
+  // The fixture measures shade and cover. Only missing lighting evidence is represented.
+  if (factor !== "lighting" || !Array.isArray(routes) || !routes.length
+    || !Number.isInteger(limit) || limit < 1 || limit > 5) return [];
+  const unknownByRoute = new Map(routes.map(route => [route.id,
+    new Map(route.segments.filter(segment => segment.light === "unknown").map(segment => [segment.id, segment]))]));
+  const unknown = new Map([...unknownByRoute.values()].flatMap(segments => [...segments]));
+  const optimisticId = pickRoute(routes, optimisticCost).id;
+  const pessimisticId = pickRoute(routes, pessimisticCost).id;
+  return [...unknown.values()].map(segment => {
+    const penalty = route => (unknownByRoute.get(route.id).get(segment.id)?.length ?? 0) * lightingPenalty;
+    const flips = pickRoute(routes, route => optimisticCost(route) + penalty(route)).id !== optimisticId
+      || pickRoute(routes, route => pessimisticCost(route) - penalty(route)).id !== pessimisticId;
+    return { segment, flips };
+  }).sort((a, b) => Number(b.flips) - Number(a.flips) || b.segment.length - a.segment.length
+    || a.segment.id.localeCompare(b.segment.id, "en"))
+    .slice(0, limit)
+    .map(({ segment, flips }, index) => ({ segment_id: segment.id, name_th: segment.title ?? segment.id, flips, priority: index + 1 }));
+}
+
+export function planRoute(input, overlays = {}) {
+  const trip = prepareTrip(input);
+  if (trip.status !== "ok") return { status: trip.status, decision: "ABSTAIN" };
+  const { from, to, time, preference } = input;
+  const { date, instant, mode, access } = trip;
+  const paths = routesFrom(from, to, instant, access);
   const routes = paths.map(path => measure(path, mode, overlays, date));
   if (!routes.length) return { status: "no_path", decision: "ABSTAIN", mode };
-  const best = score => [...routes].sort((a, b) => score(a) - score(b) || a.meters - b.meters)[0];
-  const shortest = best(route => route.meters);
-  const optimistic = best(route => route.meters + route.dark * 2);
-  const pessimistic = best(route => route.meters + route.dark * 2 + route.unknown * 2);
-  const shade = best(route => route.sunMinutes);
-  const balanced = best(route => route.meters + (route.sunMinutes ?? 0) * 65);
-  const usefulShade = balanced.meters <= shortest.meters * 1.2 && balanced.sunMinutes < shortest.sunMinutes
-    && balanced.sunMinutes <= shortest.sunMinutes * 0.85;
+  const shortest = pickRoute(routes, route => route.meters);
+  const optimistic = pickRoute(routes, optimisticCost);
+  const pessimistic = pickRoute(routes, pessimisticCost);
+  const shade = pickRoute(routes, route => route.sunMinutes);
+  const usefulShade = pickRoute(routes.filter(route => worthwhileDetour(route, shortest)),
+    route => route.meters + route.sunMinutes * 65);
   const flipped = mode === "night" && optimistic.id !== pessimistic.id;
-  const ids = flipped ? [...new Set([...optimistic.segments, ...pessimistic.segments]
-    .filter(e => e.light === "unknown").map(e => e.id))].slice(0, 3) : [];
-  const recommended = mode === "night" ? preference === "direct" ? optimistic : pessimistic : usefulShade ? balanced : shortest;
+  let evidenceIds = [];
+  if (flipped) {
+    const opposite = new Set(pessimistic.segments.map(segment => segment.id));
+    const shared = new Set(optimistic.segments.filter(segment => opposite.has(segment.id)).map(segment => segment.id));
+    evidenceIds = rankUnknowns([optimistic, pessimistic].map(route => ({
+      ...route, segments: route.segments.filter(segment => !shared.has(segment.id)),
+    })), "lighting", 3).map(item => item.segment_id);
+  }
+  const recommended = mode === "night" ? (preference === "direct" ? optimistic : pessimistic) : (usefulShade ?? shortest);
   const pool = mode === "night" ? [recommended, shortest, optimistic, pessimistic] : [recommended, shortest, shade];
   const displayed = [...new Map(pool.map(route => [route.id, route])).values()];
   return {
     status: "ok", decision: flipped ? "VERIFY" : "ACT", mode, time, date,
     datasetVersion: version, routes: displayed, recommendedId: recommended.id, shortestId: shortest.id,
-    stress: flipped ? { flipped, optimisticId: optimistic.id, pessimisticId: pessimistic.id, evidenceIds: ids } : { flipped: false },
+    stress: flipped ? { flipped, optimisticId: optimistic.id, pessimisticId: pessimistic.id, evidenceIds } : { flipped: false },
   };
 }
 
@@ -262,7 +321,7 @@ export const replay = (mode = "night", overlays = {}) => planRoute({
 
 export function compareDepartureTimes(request, times, overlays = {}) {
   if (!Array.isArray(times) || times.length < 2 || times.length > 6 || new Set(times).size !== times.length
-    || times.some(time => typeof time !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time))) {
+    || times.some(time => typeof time !== "string" || !timePattern.test(time))) {
     return { status: "invalid" };
   }
   const options = times.map(time => {
@@ -272,4 +331,32 @@ export function compareDepartureTimes(request, times, overlays = {}) {
     return { time, status: "ok", routeId: id, minutes, sunMinutes, shade, meters };
   });
   return { status: "ok", datasetVersion: version, options };
+}
+
+export function suggestDeparture(request, routeId, maxDelayMin, overlays = {}) {
+  const { departureShiftStepMinutes: step, maxDepartureShiftMinutes: max } = agentConfig;
+  if (typeof routeId !== "string" || !routeId || !Number.isInteger(maxDelayMin) || maxDelayMin < step || maxDelayMin > max) return null;
+  const trip = prepareTrip(request);
+  if (trip.status !== "ok" || trip.mode !== "day") return null;
+
+  const at = instant => {
+    if (pilotSun(instant).altitude < agentConfig.nightRoutingAltitude) return null;
+    const path = routesFrom(request.from, request.to, instant, trip.access)
+      .find(candidate => candidate.map(segment => segment.id).join(".") === routeId);
+    return path ? measure(path, "day", overlays, bangkokDateTime(instant).slice(0, 10)) : null;
+  };
+  const baseline = at(trip.instant);
+  if (!baseline) return null;
+  let best = baseline;
+  let depart = trip.instant;
+  for (let delay = step; delay <= maxDelayMin; delay += step) {
+    const instant = trip.instant + delay * 60_000;
+    const candidate = at(instant);
+    if (candidate && candidate.shade > best.shade) {
+      best = candidate;
+      depart = instant;
+    }
+  }
+  return { better: best !== baseline, depart_at: bangkokDateTime(depart),
+    shade_pct_at_new_time: best.shade, still_meets_deadline: true };
 }
