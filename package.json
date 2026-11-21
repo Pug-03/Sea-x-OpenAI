@@ -1,0 +1,11 @@
+{
+  "name": "sea-x-openai-walkwe",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test",
+    "eval": "node packages/walkwe-agentic/evals/run.mjs",
+    "start": "node packages/walkwe-agentic/src/workers/preview.mjs",
+    "mcp": "node packages/walkwe-agentic/src/integrations/mcp.mjs"
+  }
+}
