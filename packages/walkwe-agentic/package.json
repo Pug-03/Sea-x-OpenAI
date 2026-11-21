@@ -1,0 +1,12 @@
+{
+  "name": "@walkwe/agentic",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test",
+    "mcp": "node src/mcp.mjs",
+    "eval": "node evals/run.mjs"
+  }
+}

@@ -1,0 +1,631 @@
+{
+  "fixture": "siam-sandbox-1",
+  "contextVersion": "walkwe-context-v1",
+  "models": {
+    "intent": {
+      "model": "gpt-6.1-terra",
+      "effort": "none"
+    },
+    "planner": {
+      "model": "gpt-6.1-terra",
+      "effort": "high",
+      "maxOutputTokens": 4096
+    },
+    "critic": {
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "maxOutputTokens": 6144
+    },
+    "companion": {
+      "model": "gpt-6.1-terra",
+      "effort": "none"
+    },
+    "steward": {
+      "model": "gpt-6.1-terra",
+      "effort": "low"
+    },
+    "news": {
+      "model": "gpt-6.2-sol",
+      "effort": "medium"
+    }
+  },
+  "summary": {
+    "fixture": {
+      "executed": 34,
+      "passed": 34,
+      "p50Ms": 0,
+      "p95Ms": 1
+    },
+    "mock": {
+      "executed": 18,
+      "passed": 18,
+      "p50Ms": 0,
+      "p95Ms": 16
+    },
+    "live": {
+      "executed": 0,
+      "passed": 0,
+      "p50Ms": null,
+      "p95Ms": null
+    }
+  },
+  "trapsCaught": 14,
+  "trapsExecuted": 14,
+  "liveRun": "skipped_missing_key",
+  "records": [
+    {
+      "id": "I01",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 1
+    },
+    {
+      "id": "I02",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I03",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I04",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I05",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I06",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I07",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I08",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I09",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I10",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I11",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I12",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I13",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I14",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I15",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I16",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "I17",
+      "lane": "fixture",
+      "group": "intent",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R01",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 1
+    },
+    {
+      "id": "R02",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R03",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R04",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R05",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R06",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R07",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R08",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R09",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R10",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R11",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "R12",
+      "lane": "fixture",
+      "group": "worker",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "H01",
+      "lane": "mock",
+      "group": "harness",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 9
+    },
+    {
+      "id": "H02",
+      "lane": "mock",
+      "group": "harness",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 1,
+      "loop": {
+        "plannerSteps": 2,
+        "toolCalls": 2,
+        "evidenceReads": 1,
+        "rejectedFinishes": 0,
+        "criticCalls": 1,
+        "status": "verified",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H03",
+      "lane": "mock",
+      "group": "harness",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0,
+      "loop": {
+        "plannerSteps": 3,
+        "toolCalls": 3,
+        "evidenceReads": 1,
+        "rejectedFinishes": 1,
+        "criticCalls": 1,
+        "status": "verified",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H04",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "repeated_tool_call",
+      "loop": {
+        "plannerSteps": 2,
+        "toolCalls": 2,
+        "evidenceReads": 1,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H05",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "evidence_outside_snapshot",
+      "loop": {
+        "plannerSteps": 1,
+        "toolCalls": 1,
+        "evidenceReads": 0,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H06",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "tool_outside_allowlist",
+      "loop": {
+        "plannerSteps": 1,
+        "toolCalls": 1,
+        "evidenceReads": 0,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H07",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "invalid_tool_arguments",
+      "loop": {
+        "plannerSteps": 1,
+        "toolCalls": 1,
+        "evidenceReads": 0,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H08",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "verification_failed",
+      "loop": {
+        "plannerSteps": 2,
+        "toolCalls": 2,
+        "evidenceReads": 0,
+        "rejectedFinishes": 2,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H09",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "duplicate_call_id",
+      "loop": {
+        "plannerSteps": 2,
+        "toolCalls": 2,
+        "evidenceReads": 1,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H10",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "planner_tool_limit",
+      "loop": {
+        "plannerSteps": 1,
+        "toolCalls": 2,
+        "evidenceReads": 0,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H11",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "planner_step_limit",
+      "loop": {
+        "plannerSteps": 6,
+        "toolCalls": 6,
+        "evidenceReads": 6,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H14",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "verification_failed",
+      "loop": {
+        "plannerSteps": 2,
+        "toolCalls": 2,
+        "evidenceReads": 0,
+        "rejectedFinishes": 2,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H15",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "planner_tool_limit",
+      "loop": {
+        "plannerSteps": 1,
+        "toolCalls": 0,
+        "evidenceReads": 0,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H12",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "critic_rejected",
+      "loop": {
+        "plannerSteps": 2,
+        "toolCalls": 2,
+        "evidenceReads": 1,
+        "rejectedFinishes": 0,
+        "criticCalls": 1,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H13",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 16,
+      "fallback": "cancelled",
+      "loop": {
+        "plannerSteps": 1,
+        "toolCalls": 0,
+        "evidenceReads": 0,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 16
+      }
+    },
+    {
+      "id": "H16",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 16,
+      "fallback": "deadline",
+      "loop": {
+        "plannerSteps": 2,
+        "toolCalls": 2,
+        "evidenceReads": 1,
+        "rejectedFinishes": 0,
+        "criticCalls": 1,
+        "status": "fallback",
+        "elapsedMs": 16
+      }
+    },
+    {
+      "id": "H17",
+      "lane": "mock",
+      "group": "harness",
+      "trap": true,
+      "passed": true,
+      "elapsedMs": 0,
+      "fallback": "model_unavailable",
+      "loop": {
+        "plannerSteps": 1,
+        "toolCalls": 0,
+        "evidenceReads": 0,
+        "rejectedFinishes": 0,
+        "criticCalls": 0,
+        "status": "fallback",
+        "elapsedMs": 0
+      }
+    },
+    {
+      "id": "H18",
+      "lane": "mock",
+      "group": "harness",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "S01",
+      "lane": "fixture",
+      "group": "safeguards",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "S02",
+      "lane": "fixture",
+      "group": "safeguards",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "S03",
+      "lane": "fixture",
+      "group": "safeguards",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "S04",
+      "lane": "fixture",
+      "group": "safeguards",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    },
+    {
+      "id": "S05",
+      "lane": "fixture",
+      "group": "safeguards",
+      "trap": false,
+      "passed": true,
+      "elapsedMs": 0
+    }
+  ]
+}
